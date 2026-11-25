@@ -1,0 +1,112 @@
+name: Build macOS & Windows Installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: mac
+          - os: windows-2025
+            platform: win
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify release version
+        if: github.ref_type == 'tag'
+        run: node -e "if (process.env.GITHUB_REF_NAME !== 'v' + require('./package.json').version) throw new Error('Tag must match the package version')"
+
+      - name: Build installer
+        run: npm run build:${{ matrix.platform }} -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Verify macOS disk images
+        if: matrix.platform == 'mac'
+        shell: bash
+        run: |
+          hdiutil verify dist/figma-export-*-mac-arm64.dmg
+          hdiutil verify dist/figma-export-*-mac-x64.dmg
+
+      - name: Test Windows installer
+        if: matrix.platform == 'win'
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $setup = Get-Item 'dist/figma-export-*-win-x64-setup.exe'
+          $portable = Get-Item 'dist/figma-export-*-win-x64-portable.exe'
+          if (!$setup -or !$portable) { throw 'Missing Windows installer or portable build' }
+          $installDir = Join-Path $env:RUNNER_TEMP 'FigmaBulkExporter'
+          $install = Start-Process -FilePath $setup.FullName -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
+          if ($install.ExitCode -ne 0 -or !(Test-Path "$installDir/resources/app.asar")) {
+            throw "Silent installation failed with exit code $($install.ExitCode)"
+          }
+          if (!(Get-ChildItem $installDir -Filter '*.exe' | Where-Object { $_.Name -notlike 'Uninstall*' })) {
+            throw 'Installed executable missing'
+          }
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-${{ matrix.platform }}
+          path: |
+            dist/figma-export-*.dmg
+            dist/figma-export-*.exe
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v8
+        with:
+          pattern: installer-*
+          merge-multiple: true
+          path: installers
+
+      - name: Publish GitHub release
+        working-directory: installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          files=(
+            "figma-export-$version-mac-arm64.dmg"
+            "figma-export-$version-mac-x64.dmg"
+            "figma-export-$version-win-x64-setup.exe"
+            "figma-export-$version-win-x64-portable.exe"
+          )
+          sha256sum "${files[@]}" > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes "${files[@]}" SHA256SUMS.txt

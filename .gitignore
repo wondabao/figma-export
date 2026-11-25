@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.figma-profile/
+.exporter-config.json
+exporter-config.json
+export-manifest.json
+exports/
+.env
+.env.*
+*.fig
+*.jam
+*.deck
+*.sketch
+.DS_Store

@@ -1,0 +1,79 @@
+{
+  "name": "figma-export",
+  "productName": "Figma 一键导出工具",
+  "version": "1.0.0",
+  "description": "Figma 文件一键导出桌面软件（macOS / Windows）— 自动扫描所有团队、文件夹与草稿，后台静默批量导出 .fig 源文件",
+  "author": "wondabao",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wondabao/figma-export.git"
+  },
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:all": "electron-builder --mac --win"
+  },
+  "devDependencies": {
+    "electron": "^35.1.5",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.figma.bulk.exporter",
+    "productName": "Figma 一键导出工具",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "src/utils.js",
+      "src/scanner.js",
+      "src/electronBrowser.js",
+      "src/electronExporter.js",
+      "src/electronImporter.js",
+      "public/**/*",
+      "LICENSE",
+      "package.json"
+    ],
+    "mac": {
+      "artifactName": "${name}-${version}-mac-${arch}.${ext}",
+      "category": "public.app-category.productivity",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "artifactName": "${name}-${version}-win-${arch}-setup.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "portable": {
+      "artifactName": "${name}-${version}-win-${arch}-portable.${ext}"
+    }
+  }
+}

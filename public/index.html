@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title></title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-root">
+    <!-- 顶部一体化标题栏（与 macOS 交通信号灯同行） -->
+    <header class="window-topbar">
+      <div class="topbar-left-spacer" aria-hidden="true"></div>
+
+      <div class="segmented-tabs" role="tablist" aria-label="功能模式切换">
+        <button class="seg-tab active" id="tabExport" role="tab" aria-selected="true">批量导出</button>
+        <button class="seg-tab" id="tabImport" role="tab" aria-selected="false">批量导入</button>
+      </div>
+
+      <div class="topbar-right">
+        <button class="btn-login-pill" id="btnLoginTop">登录 Figma</button>
+
+        <div class="user-menu-wrap hidden" id="userMenuWrap">
+          <button class="user-trigger" id="btnUserTrigger" type="button">
+            <span class="user-avatar" id="userAvatar">A</span>
+            <span class="user-name" id="userNameText">Figma</span>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 6l4 4 4-4"/>
+            </svg>
+          </button>
+          <div class="popover-menu hidden" id="userDropdown">
+            <div class="popover-user-email" id="userEmailText"></div>
+            <button class="popover-item" id="btnRecheckAuth" type="button">打开 Figma 登录页</button>
+            <button class="popover-item danger" id="btnSwitchAccount" type="button">切换账号 / 退出登录</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- 三栏主工作区 -->
+    <main class="workspace-grid">
+      <!-- ==================== 左栏：工作空间导航 ==================== -->
+      <aside class="card nav-sidebar">
+        <div class="brand-header">
+          <div class="figma-icon-box" aria-hidden="true">
+            <svg width="17" height="24" viewBox="41.65 10.41 58.72 92.28" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M56.3362 102.684C64.4381 102.684 71.0136 95.7941 71.0136 87.3047V71.9254H56.3362C48.2344 71.9254 41.6589 78.8153 41.6589 87.3047C41.6589 95.7941 48.2344 102.684 56.3362 102.684Z" fill="#0ACF83"/>
+              <path d="M41.6589 56.5483C41.6589 48.0589 48.2344 41.169 56.3362 41.169H71.0136V71.9276H56.3362C48.2344 71.9276 41.6589 65.0377 41.6589 56.5483Z" fill="#A259FF"/>
+              <path d="M41.6666 25.7917C41.6666 17.3023 48.242 10.4124 56.3439 10.4124H71.0212V41.171H56.3439C48.242 41.171 41.6666 34.2811 41.6666 25.7917Z" fill="#F24E1E"/>
+              <path d="M71.0102 10.4124H85.6875C93.7894 10.4124 100.365 17.3023 100.365 25.7917C100.365 34.2811 93.7894 41.1711 85.6875 41.1711H71.0102V10.4124Z" fill="#FF7262"/>
+              <path d="M100.365 56.5483C100.365 65.0377 93.7894 71.9276 85.6875 71.9276C77.5856 71.9276 71.0102 65.0377 71.0102 56.5483C71.0102 48.0589 77.5856 41.169 85.6875 41.169C93.7894 41.169 100.365 48.0589 100.365 56.5483Z" fill="#1ABCFE"/>
+            </svg>
+          </div>
+          <span class="brand-title" id="sidebarBrandTitle">Figma 备份</span>
+        </div>
+
+        <div class="nav-section-label" id="navSectionLabel">工作空间</div>
+        <nav class="nav-list" id="workspaceNavList"></nav>
+
+        <div class="nav-footer">
+          <button class="nav-item nav-failed-btn" id="btnNavFailed" type="button">
+            <span class="nav-item-left">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>失败项</span>
+            </span>
+            <span class="nav-count danger-text" id="navFailedCount">0</span>
+          </button>
+
+          <button class="nav-item nav-action-btn" id="btnOpenAddTeamModal" type="button">
+            <span class="nav-item-left">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              <span id="navBottomActionText">添加团队</span>
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- ==================== 中栏 A：云端文件（批量导出） ==================== -->
+      <section class="card center-card" id="exportCenterCard">
+        <div class="center-header">
+          <div>
+            <h1 class="center-title">云端文件</h1>
+            <p class="center-subtitle" id="exportOverviewMeta">尚未扫描团队与文件夹</p>
+          </div>
+          <button class="pill-btn" id="btnScan" type="button">
+            <svg class="icon-spin-target" id="scanIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
+            </svg>
+            <span id="btnScanText">重新扫描</span>
+          </button>
+        </div>
+
+        <!-- 搜索与筛选行 -->
+        <div class="filter-bar">
+          <div class="search-box">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.2" y2="16.2"/>
+            </svg>
+            <input type="text" id="searchInput" placeholder="搜索团队、文件夹或文件" />
+          </div>
+
+          <div class="filter-dropdown-wrap">
+            <button class="pill-btn" id="btnExportFilterToggle" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+              </svg>
+              <span>筛选</span>
+              <span class="filter-dot hidden" id="exportFilterDot"></span>
+            </button>
+
+            <div class="popover-filter hidden" id="exportFilterPopover">
+              <div class="popover-field">
+                <label>文件格式</label>
+                <select id="typeFilter" class="clean-select">
+                  <option value="all">全部格式</option>
+                  <option value="design">Design (.fig)</option>
+                  <option value="whiteboard">FigJam (.jam)</option>
+                  <option value="slides">Slides (.deck)</option>
+                </select>
+              </div>
+              <div class="popover-field">
+                <label>备份状态</label>
+                <select id="statusFilter" class="clean-select">
+                  <option value="all">全部状态</option>
+                  <option value="need_export">待导出 / 有更新</option>
+                  <option value="exported">已备份</option>
+                  <option value="failed">失败</option>
+                </select>
+              </div>
+              <button class="text-link-btn" id="btnResetExportFilters" type="button">重置筛选条件</button>
+            </div>
+          </div>
+
+          <button class="pill-btn" id="btnToggleExpand" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
+            <span id="expandBtnText">展开全部</span>
+          </button>
+        </div>
+
+        <!-- 树形表格区 -->
+        <div class="table-shell">
+          <div class="table-head">
+            <div class="col-check">
+              <input type="checkbox" class="dark-cb" id="exportMasterCb" />
+            </div>
+            <div class="col-name">名称</div>
+            <div class="col-format">格式</div>
+            <div class="col-status">状态</div>
+          </div>
+
+          <div class="table-body" id="treeContainer"></div>
+        </div>
+
+        <!-- 底部选择统计栏 -->
+        <div class="center-footer">
+          <span class="footer-selected-text" id="selectionSummary">已选 0 个文件</span>
+          <button class="footer-clear-btn" id="btnClearOrSelectAll" type="button">清除选择</button>
+        </div>
+      </section>
+
+      <!-- ==================== 中栏 B：本地文件（批量导入） ==================== -->
+      <section class="card center-card hidden" id="importCenterCard">
+        <div class="center-header">
+          <div>
+            <h1 class="center-title">本地文件</h1>
+            <p class="center-subtitle" id="importOverviewMeta">支持选择或直接拖入 .fig / .jam / .deck / .sketch 文件与备份目录</p>
+          </div>
+          <div class="header-btn-group">
+            <button class="pill-btn" id="btnPickImportFiles" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              <span>选择文件</span>
+            </button>
+            <button class="pill-btn" id="btnPickImportFolder" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span>选择文件夹</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <div class="search-box">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.2" y2="16.2"/>
+            </svg>
+            <input type="text" id="importSearchInput" placeholder="搜索本地文件名或所属目录" />
+          </div>
+
+          <div class="filter-dropdown-wrap">
+            <button class="pill-btn" id="btnImportFilterToggle" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+              </svg>
+              <span>筛选</span>
+              <span class="filter-dot hidden" id="importFilterDot"></span>
+            </button>
+
+            <div class="popover-filter hidden" id="importFilterPopover">
+              <div class="popover-field">
+                <label>文件后缀</label>
+                <select id="importExtFilter" class="clean-select">
+                  <option value="all">全部格式</option>
+                  <option value=".fig">.fig (Design)</option>
+                  <option value=".jam">.jam (FigJam)</option>
+                  <option value=".deck">.deck (Slides)</option>
+                  <option value=".sketch">.sketch</option>
+                </select>
+              </div>
+              <div class="popover-field">
+                <label>导入状态</label>
+                <select id="importStatusFilter" class="clean-select">
+                  <option value="all">全部状态</option>
+                  <option value="pending">待导入</option>
+                  <option value="imported">已导入 / 已跳过</option>
+                  <option value="failed">失败</option>
+                </select>
+              </div>
+              <button class="text-link-btn" id="btnResetImportFilters" type="button">重置筛选条件</button>
+            </div>
+          </div>
+
+          <button class="pill-btn" id="btnClearImportQueue" type="button">清空列表</button>
+        </div>
+
+        <div class="table-shell dropzone-shell" id="importDropzone">
+          <div class="table-head">
+            <div class="col-check">
+              <input type="checkbox" class="dark-cb" id="importMasterCb" />
+            </div>
+            <div class="col-name">名称</div>
+            <div class="col-format">格式</div>
+            <div class="col-status">状态</div>
+          </div>
+
+          <div class="table-body" id="importTreeContainer"></div>
+        </div>
+
+        <div class="center-footer">
+          <span class="footer-selected-text" id="importSelectionSummary">已选 0 个文件</span>
+          <button class="footer-clear-btn" id="btnImportClearOrSelectAll" type="button">清除选择</button>
+        </div>
+      </section>
+
+      <!-- ==================== 右栏：设置卡片 + 进度卡片 ==================== -->
+      <aside class="right-column">
+        <!-- 导出设置卡片 -->
+        <div class="card settings-card" id="exportSettingsCard">
+          <h2 class="card-title">导出设置</h2>
+
+          <div class="setting-block">
+            <div class="setting-caption">备份位置</div>
+            <div class="path-picker-row">
+              <button class="path-display-btn" id="btnOpenFolder" type="button" title="点击打开此文件夹">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span id="outputDirDisplay">~/Documents/Figma Exports</span>
+              </button>
+              <button class="pill-btn btn-compact" id="btnChooseDir" type="button">更改</button>
+            </div>
+          </div>
+
+          <div class="switch-rows">
+            <label class="switch-row">
+              <span class="switch-label">增量备份</span>
+              <input type="checkbox" class="ios-switch" id="optSkipExported" checked />
+            </label>
+            <label class="switch-row">
+              <span class="switch-label">包含个人草稿</span>
+              <input type="checkbox" class="ios-switch" id="optIncludeDrafts" checked />
+            </label>
+            <label class="switch-row">
+              <span class="switch-label">后台静默导出</span>
+              <input type="checkbox" class="ios-switch" id="optSilentExport" checked />
+            </label>
+            <div class="switch-row">
+              <span class="switch-label">单文件超时</span>
+              <div class="timeout-box">
+                <input type="number" id="optTimeoutSec" class="num-input" min="30" max="1200" value="180" />
+                <span class="unit-text">秒</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 导入设置卡片 -->
+        <div class="card settings-card hidden" id="importSettingsCard">
+          <div class="card-title-row">
+            <h2 class="card-title">导入设置</h2>
+            <button class="text-link-btn" id="btnRefreshTargets" type="button">↻ 刷新团队</button>
+          </div>
+
+          <div class="setting-block">
+            <div class="setting-caption">目标位置</div>
+            <select id="importTargetMode" class="clean-select full-width">
+              <option value="drafts">个人草稿箱 (Drafts)</option>
+              <option value="folder">指定团队与文件夹</option>
+              <option value="structure">按本地目录自动建文件夹还原</option>
+            </select>
+          </div>
+
+          <div class="setting-block hidden" id="importTeamField">
+            <div class="setting-caption">目标团队</div>
+            <select id="importTeamSelect" class="clean-select full-width">
+              <option value="">请点击右上角「↻ 刷新团队」</option>
+            </select>
+          </div>
+
+          <div class="setting-block hidden" id="importFolderField">
+            <div class="setting-caption">目标文件夹</div>
+            <div class="path-picker-row">
+              <select id="importFolderSelect" class="clean-select" style="flex: 1; min-width: 0;">
+                <option value="">请先选择团队</option>
+              </select>
+              <button class="pill-btn btn-compact" id="btnNewFigmaFolder" type="button">+ 新建</button>
+            </div>
+          </div>
+
+          <div class="switch-rows">
+            <label class="switch-row">
+              <span class="switch-label">跳过同名文件</span>
+              <input type="checkbox" class="ios-switch" id="optImportSkipExisting" checked />
+            </label>
+            <label class="switch-row">
+              <span class="switch-label">后台静默导入</span>
+              <input type="checkbox" class="ios-switch" id="optImportSilent" checked />
+            </label>
+            <div class="switch-row">
+              <span class="switch-label">单文件超时</span>
+              <div class="timeout-box">
+                <input type="number" id="optImportTimeoutSec" class="num-input" min="30" max="1800" value="240" />
+                <span class="unit-text">秒</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 进度与主操作卡片 -->
+        <div class="card progress-card">
+          <div class="progress-top">
+            <h2 class="card-title" id="progressTitle">导出进度</h2>
+            <span class="progress-pct" id="progressPct">0%</span>
+          </div>
+
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progressFill" style="width: 0%"></div>
+          </div>
+
+          <div class="progress-status-line" id="progressMeta">等待开始导出</div>
+
+          <div class="progress-pills">
+            <span class="stat-pill">成功 <b id="cntSucceeded">0</b></span>
+            <span class="stat-pill">跳过 <b id="cntSkipped">0</b></span>
+            <span class="stat-pill danger">失败 <b id="cntFailed">0</b></span>
+          </div>
+
+          <div class="cta-stack">
+            <button class="btn-primary-dark" id="btnPrimaryAction" type="button" disabled>
+              导出 0 个文件
+            </button>
+            <button class="btn-stop-outline hidden" id="btnStopAction" type="button">
+              停止任务
+            </button>
+            <button class="retry-text-btn hidden" id="btnRetryAction" type="button">
+              重试 0 个失败项
+            </button>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- 底部状态栏 -->
+    <footer class="statusbar">
+      <div class="status-left">
+        <span class="status-dot" id="statusBarDot"></span>
+        <span class="status-text" id="statusBarText">准备就绪</span>
+      </div>
+      <button class="activity-log-trigger" id="btnToggleLogDrawer" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>
+        </svg>
+        <span>活动日志</span>
+      </button>
+    </footer>
+
+    <!-- 活动日志抽屉弹窗 -->
+    <div class="log-drawer hidden" id="logDrawer">
+      <div class="log-drawer-header">
+        <span class="log-drawer-title">活动日志</span>
+        <div class="log-drawer-actions">
+          <button class="text-link-btn" id="btnClearLogs" type="button">清空</button>
+          <button class="icon-close-btn" id="btnCloseLogDrawer" type="button" aria-label="关闭日志">×</button>
+        </div>
+      </div>
+      <div class="log-console" id="logConsole"></div>
+    </div>
+
+    <!-- 添加团队弹窗 -->
+    <div class="modal-backdrop hidden" id="addTeamModal">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3>添加补充团队</h3>
+          <button class="icon-close-btn" id="btnCloseTeamModal" type="button">×</button>
+        </div>
+        <p class="modal-desc">如果有隐藏团队未被自动发现，可粘贴包含 <code>/team/数字</code> 的 Figma 团队链接或纯数字 Team ID：</p>
+        <div class="modal-input-row">
+          <input type="text" id="manualTeamInput" class="clean-input" placeholder="https://www.figma.com/files/team/123456789/..." />
+          <button class="btn-modal-submit" id="btnAddTeam" type="button">添加</button>
+        </div>
+        <div class="extra-teams-chips" id="extraTeamsChips"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
