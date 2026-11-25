@@ -17,6 +17,8 @@ Figma 文件批量导入导出工具，支持 macOS 和 Windows。
 
 ## 应用截图
 
+以下为登录 Figma 后的 macOS 应用界面，账号信息已匿名化。
+
 ### 批量导出
 
 ![批量导出界面，包含工作空间、文件列表和导出配置](docs/screenshots/bulk-export.png)
