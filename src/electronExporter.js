@@ -72,10 +72,11 @@ function findControl(selector, label, prepareInput) {
 }
 
 class ElectronFigmaExporter {
-  constructor(browserManager, onLog = () => {}, onProgress = () => {}) {
+  constructor(browserManager, onLog = () => {}, onProgress = () => {}, storage = { ensureDir, loadManifest, saveManifest, exists: fs.existsSync }) {
     this.browser = browserManager;
     this.onLog = onLog;
     this.onProgress = onProgress;
+    this.storage = storage;
     this.isRunning = false;
     this.stopRequested = false;
     this.currentStats = null;
@@ -357,17 +358,18 @@ class ElectronFigmaExporter {
       throw new Error('请至少选择一个要导出的文件');
     }
 
-    const auth = await this.browser.checkAuthStatus();
-    if (!auth.authenticated) {
-      throw new Error('Figma 尚未登录，请先点击「登录 Figma」完成登录');
-    }
-
     this.isRunning = true;
     this.stopRequested = false;
 
-    ensureDir(outputDir);
-    const manifest = loadManifest(outputDir);
-    const dupSet = computeDuplicateNameKeys(allFilesForDupCheck || files);
+    try {
+      const auth = await this.browser.checkAuthStatus();
+      if (!auth.authenticated) {
+        throw new Error('Figma 尚未登录，请先点击「登录 Figma」完成登录');
+      }
+
+      await this.storage.ensureDir(outputDir);
+      const manifest = await this.storage.loadManifest(outputDir);
+      const dupSet = computeDuplicateNameKeys(allFilesForDupCheck || files);
 
     const stats = {
       total: files.length,
@@ -407,8 +409,8 @@ class ElectronFigmaExporter {
         if (skipExported) {
           const prev = manifest.files[file.key];
           const existsOnDisk =
-            (prev && prev.localPath && fs.existsSync(prev.localPath)) ||
-            fs.existsSync(targetPath);
+            (prev && prev.localPath && await this.storage.exists(prev.localPath)) ||
+            await this.storage.exists(targetPath);
 
           const isUnchanged =
             !prev ||
@@ -461,7 +463,7 @@ class ElectronFigmaExporter {
             exportedAt: new Date().toISOString(),
             error: null,
           };
-          saveManifest(outputDir, manifest);
+          await this.storage.saveManifest(outputDir, manifest);
 
           stats.exported += 1;
           stats.completed += 1;
@@ -494,7 +496,7 @@ class ElectronFigmaExporter {
             failedAt: new Date().toISOString(),
             error: err.message,
           };
-          saveManifest(outputDir, manifest);
+          await this.storage.saveManifest(outputDir, manifest);
 
           stats.failed += 1;
           stats.completed += 1;
@@ -529,6 +531,11 @@ class ElectronFigmaExporter {
     }
 
     return stats;
+    } catch (earlyErr) {
+      this.isRunning = false;
+      this.stopRequested = false;
+      throw earlyErr;
+    }
   }
 }
 

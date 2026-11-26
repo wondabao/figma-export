@@ -270,9 +270,9 @@ code {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 214px minmax(0, 1fr) 312px;
-  gap: 14px;
-  padding: 0 16px;
+  grid-template-columns: 196px minmax(0, 1fr) 288px;
+  gap: 12px;
+  padding: 0 14px;
 }
 
 .card {

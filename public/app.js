@@ -1257,13 +1257,20 @@
       .filter(Boolean);
 
     if (paths.length === 0) return;
+    await addDroppedPaths(paths);
+  });
+
+  async function addDroppedPaths(paths) {
+    if (state.mode !== 'import' || state.isImporting || !paths.length) return;
     try {
       const res = await bridge.addImportPaths(paths);
       applyUpdatedImportQueue(res.queue, true);
     } catch (err) {
       alert(`添加拖拽文件失败: ${cleanError(err)}`);
     }
-  });
+  }
+
+  if (bridge.onDroppedPaths) bridge.onDroppedPaths(addDroppedPaths);
 
   el.importSearchInput.addEventListener('input', renderImportSection);
   el.importExtFilter.addEventListener('change', renderImportSection);

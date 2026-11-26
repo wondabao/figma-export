@@ -18,10 +18,11 @@ function describeFailure(response) {
 }
 
 class FigmaScanner {
-  constructor(browserManager, onLog = () => {}, onProgress = () => {}) {
+  constructor(browserManager, onLog = () => {}, onProgress = () => {}, storage = { loadManifest, exists: fs.existsSync }) {
     this.browser = browserManager;
     this.onLog = onLog;
     this.onProgress = onProgress;
+    this.storage = storage;
   }
 
   /**
@@ -129,6 +130,7 @@ class FigmaScanner {
   async discoverTeams(auth, extraTeamIds) {
     const teams = new Map();
     const orgs = new Map();
+    const planDraftFolders = new Map(); // folderId -> planName
     const addTeam = (team, org) => {
       if (!team?.id || team.trashed_at || team.deleted_at) return;
       const id = String(team.id);
@@ -160,11 +162,17 @@ class FigmaScanner {
     ]);
     const planTeams = plans.ok ? responseList(plans.data, 'teams') : null;
     const planOrgs = plans.ok ? responseList(plans.data, 'orgs') : null;
-    if (!planTeams && !planOrgs) {
+    const planRecords = plans.ok ? responseList(plans.data, 'plans') : null;
+    if (!planTeams && !planOrgs && !planRecords) {
       this.onLog('warn', `无法读取当前账号的方案列表（${describeFailure(plans)}）`);
     }
     for (const team of planTeams || []) addTeam(team);
     for (const org of planOrgs || []) addOrg(org);
+    for (const p of planRecords || []) {
+      if (p?.draft_folder_id) {
+        planDraftFolders.set(String(p.draft_folder_id), p.plan_name || 'Drafts');
+      }
+    }
 
     const memberTeams = memberships?.ok ? responseList(memberships.data, 'teams') : null;
     if (memberships && !memberTeams) {
@@ -193,6 +201,7 @@ class FigmaScanner {
       addTeam({ id, name: res.ok ? res.data?.meta?.name : null, manual: true });
     }
 
+    this.lastPlanDraftFolders = planDraftFolders;
     return Array.from(teams.values());
   }
 
@@ -215,22 +224,34 @@ class FigmaScanner {
     const teamsResult = [];
     const allFiles = [];
 
-    // 扫描个人草稿箱 (Drafts)
+    // 扫描个人草稿箱 (Drafts，含各空间独立草稿目录)
     if (includeDrafts) {
       this.onProgress({ phase: 'scanning_drafts', message: '正在扫描个人草稿 (Drafts)...' });
       const draftFilesMap = new Map();
-      const draftsFolderId = auth.user.draftsFolderId;
+      const draftFolderIds = new Map();
+      if (auth.user.draftsFolderId) {
+        draftFolderIds.set(String(auth.user.draftsFolderId), 'Drafts');
+      }
+      if (this.lastPlanDraftFolders instanceof Map) {
+        for (const [fid, pName] of this.lastPlanDraftFolders.entries()) {
+          if (!draftFolderIds.has(fid)) {
+            draftFolderIds.set(fid, pName ? `Drafts (${pName})` : 'Drafts');
+          }
+        }
+      }
 
-      if (draftsFolderId) {
+      for (const [fid, fLabel] of draftFolderIds.entries()) {
         const files = await this.fetchFolderFiles(
-          draftsFolderId,
+          fid,
           'drafts',
           'Drafts (个人草稿)',
-          'Drafts',
+          draftFolderIds.size > 1 ? fLabel : 'Drafts',
           true
         );
         for (const f of files) draftFilesMap.set(f.key, f);
       }
+
+      const draftsFolderId = auth.user.draftsFolderId;
 
       // 备用草稿接口
       if (draftFilesMap.size === 0) {
@@ -318,7 +339,7 @@ class FigmaScanner {
     }
 
     // 结合本地 export-manifest.json 标注每个文件的导出状态
-    const manifest = outputDir ? loadManifest(outputDir) : { files: {} };
+    const manifest = outputDir ? await this.storage.loadManifest(outputDir) : { files: {} };
     const dupSet = computeDuplicateNameKeys(allFiles);
 
     for (const file of allFiles) {
@@ -328,7 +349,7 @@ class FigmaScanner {
       file.targetPath = targetPath;
 
       const record = manifest.files[file.key];
-      if (record && record.status === 'exported' && record.localPath && fs.existsSync(record.localPath)) {
+      if (record && record.status === 'exported' && record.localPath && await this.storage.exists(record.localPath)) {
         if (file.updatedAt && record.remoteUpdatedAt && file.updatedAt !== record.remoteUpdatedAt) {
           file.backupStatus = 'outdated';
         } else {
@@ -339,7 +360,7 @@ class FigmaScanner {
       } else if (record && record.status === 'failed') {
         file.backupStatus = 'failed';
         file.lastError = record.error || null;
-      } else if (targetPath && fs.existsSync(targetPath)) {
+      } else if (targetPath && await this.storage.exists(targetPath)) {
         file.backupStatus = 'exported';
       } else {
         file.backupStatus = 'pending';

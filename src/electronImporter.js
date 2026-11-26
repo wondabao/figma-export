@@ -531,11 +531,6 @@ class ElectronFigmaImporter {
       throw new Error('请先选择至少一个要导入的本地设计文件');
     }
 
-    const auth = await this.browser.checkAuthStatus();
-    if (!auth.authenticated) {
-      throw new Error('Figma 尚未登录，请先点击右上角「登录 Figma」完成登录');
-    }
-
     const mode = targetConfig?.mode || 'drafts';
     if (mode === 'folder' && (!targetConfig.teamId || !targetConfig.folderId)) {
       throw new Error('请选择要导入的目标团队与文件夹');
@@ -546,6 +541,17 @@ class ElectronFigmaImporter {
 
     this.isRunning = true;
     this.stopRequested = false;
+
+    let auth;
+    try {
+      auth = await this.browser.checkAuthStatus();
+      if (!auth.authenticated) {
+        throw new Error('Figma 尚未登录，请先点击右上角「登录 Figma」完成登录');
+      }
+    } catch (err) {
+      this.isRunning = false;
+      throw err;
+    }
 
     const stats = {
       total: files.length,

@@ -13,6 +13,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "tauri:dev": "npm --prefix prototype/tauri run dev",
+    "tauri:build": "npm --prefix prototype/tauri run build",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:all": "electron-builder --mac --win"
@@ -30,6 +32,7 @@
     },
     "files": [
       "electron/**/*",
+      "src/appController.js",
       "src/utils.js",
       "src/scanner.js",
       "src/electronBrowser.js",

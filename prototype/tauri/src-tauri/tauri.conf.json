@@ -1,0 +1,38 @@
+{
+  "productName": "Figma 一键导出工具",
+  "version": "0.1.0",
+  "identifier": "io.github.wondabao.figma-export.prototype",
+  "build": {
+    "beforeBuildCommand": "node stage-ui.cjs",
+    "beforeDevCommand": "node stage-ui.cjs",
+    "frontendDist": "../generated-ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "",
+        "width": 1080,
+        "height": 700,
+        "minWidth": 920,
+        "minHeight": 600,
+        "center": true,
+        "visible": false,
+        "dragDropEnabled": true,
+        "backgroundColor": "#f2f2f4"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+      "capabilities": ["main"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "nsis"],
+    "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"],
+    "macOS": { "minimumSystemVersion": "13.0", "signingIdentity": "-" },
+    "windows": { "webviewInstallMode": { "type": "downloadBootstrapper" } }
+  }
+}
