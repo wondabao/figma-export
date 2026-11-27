@@ -10,6 +10,7 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "local_files",
             "figma_browser",
+            "app_updater",
         ]),
     ))
     .expect("failed to generate Tauri build metadata");

@@ -1,7 +1,7 @@
 {
-  "productName": "Figma 一键导出工具",
-  "version": "0.1.0",
-  "identifier": "io.github.wondabao.figma-export.prototype",
+  "productName": "Figma Export",
+  "version": "1.0.0",
+  "identifier": "io.github.wondabao.figma-export",
   "build": {
     "beforeBuildCommand": "node stage-ui.cjs",
     "beforeDevCommand": "node stage-ui.cjs",
@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; frame-src 'self'; object-src 'none'; frame-ancestors 'self'; base-uri 'none'",
       "capabilities": ["main"]
     }
   },

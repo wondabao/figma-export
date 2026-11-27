@@ -127,8 +127,18 @@ pub async fn local_files(window: WebviewWindow, state: State<'_, LocalFiles>, ac
             "platform": if cfg!(target_os = "macos") { "darwin" } else if cfg!(windows) { "win32" } else { "linux" },
         })),
         "load_config" => {
-            let legacy = directory.data_dir().map_err(error)?.join("Figma 一键导出工具").join(SETTINGS);
-            Ok(read_json(&settings).filter(Value::is_object).or_else(|| read_json(&legacy).filter(Value::is_object)).unwrap_or(Value::Object(Map::new())))
+            let data_root = directory.data_dir().map_err(error)?;
+            let fallback_dirs = [
+                "Figma Export",
+                "io.github.wondabao.figma-export.prototype",
+                "Figma 一键导出工具",
+            ];
+            let existing = read_json(&settings).filter(Value::is_object).or_else(|| {
+                fallback_dirs
+                    .iter()
+                    .find_map(|dir| read_json(&data_root.join(dir).join(SETTINGS)).filter(Value::is_object))
+            });
+            Ok(existing.unwrap_or(Value::Object(Map::new())))
         }
         "save_config" => { write_json(&settings, &args["config"])?; Ok(Value::Null) }
         "ensure_dir" => { fs::create_dir_all(absolute(&args["path"])?).map_err(error)?; Ok(Value::Null) }

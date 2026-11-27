@@ -1,4 +1,4 @@
-// Loaded before the shared renderer. Only the local application window has these capabilities.
+// Loaded before the shared renderer. Connects UI actions directly to Tauri 2 native commands.
 const tauri = window.__TAURI__;
 async function invokeTauri(cmd, payload) {
   try {
@@ -11,6 +11,7 @@ async function invokeTauri(cmd, payload) {
 }
 const disk = (action, args = {}) => invokeTauri('local_files', { action, args });
 const nativeBrowser = (action, args = {}) => invokeTauri('figma_browser', { action, args });
+const nativeUpdater = (action, args = {}) => invokeTauri('app_updater', { action, args });
 const handlers = new Map();
 const listeners = new Map();
 const modules = new Map();
@@ -55,44 +56,37 @@ const localPath = {
 
 const storage = {
   loadConfig: () => disk('load_config'),
-  saveConfig: config => disk('save_config', { config }),
-  ensureDir: path => disk('ensure_dir', { path }),
-  exists: path => disk('exists', { path }),
-  loadManifest: path => disk('load_manifest', { path }),
-  saveManifest: (path, manifest) => {
+  saveConfig: (config) => disk('save_config', { config }),
+  ensureDir: (p) => disk('ensure_dir', { path: p }),
+  exists: (p) => disk('exists', { path: p }),
+  loadManifest: (p) => disk('load_manifest', { path: p }),
+  saveManifest: (p, manifest) => {
     manifest.updatedAt = new Date().toISOString();
-    return disk('save_manifest', { path, manifest });
+    return disk('save_manifest', { path: p, manifest });
   },
-  collectLocalImportFiles: paths => disk('collect_files', { paths }),
+  collectLocalImportFiles: (p) => disk('collect_files', { paths: p }),
 };
 
-const electron = {
-  contextBridge: { exposeInMainWorld: (key, value) => { window[key] = value; } },
-  ipcRenderer: {
-    invoke: async (name, ...args) => {
-      await controllerReady;
-      const handler = handlers.get(name);
-      if (!handler) throw Error(`未注册的应用操作 ${name}`);
-      try { return await handler(null, ...args); }
-      catch (error) { throw new Error(error?.message || String(error)); }
-    },
-    on: (name, fn) => {
-      if (!listeners.has(name)) listeners.set(name, new Set());
-      listeners.get(name).add(fn);
-    },
-  },
-  webUtils: { getPathForFile: () => '' },
-};
+async function invokeChannel(name, ...args) {
+  await controllerReady;
+  const handler = handlers.get(name);
+  if (!handler) throw new Error(`未注册的应用操作 ${name}`);
+  try {
+    return await handler(...args);
+  } catch (error) {
+    throw new Error(error?.message || String(error));
+  }
+}
+
+function subscribeChannel(name, fn) {
+  if (!listeners.has(name)) listeners.set(name, new Set());
+  listeners.get(name).add(fn);
+}
 
 function require(name) {
-  if (name === 'electron') return electron;
   if (name === 'path') return localPath;
-  if (name === 'fs') {
-    // The shared batch and scanner layers use the injected asynchronous storage object.
-    return new Proxy({}, { get: (_, method) => () => { throw Error(`Unbound filesystem method ${String(method)}`); } });
-  }
   const item = modules.get(name);
-  if (!item) throw Error(`Missing shared module ${name}`);
+  if (!item) throw new Error(`Missing shared module ${name}`);
   if (!item.module) {
     item.module = { exports: {} };
     item.factory(require, item.module);
@@ -115,12 +109,12 @@ class SystemFigmaBrowser {
     return result;
   }
 
-  fetchFigmaJson(path) {
-    return nativeBrowser('request', { path, userId: this.user?.id });
+  fetchFigmaJson(p) {
+    return nativeBrowser('request', { path: p, userId: this.user?.id });
   }
 
-  mutateFigmaJson(path, method, payload) {
-    return nativeBrowser('request', { path, method, payload, userId: this.user?.id });
+  mutateFigmaJson(p, method, payload) {
+    return nativeBrowser('request', { path: p, method, payload, userId: this.user?.id });
   }
 
   discoverTeamsFromSidebarDom() {
@@ -132,7 +126,10 @@ class SystemFigmaBrowser {
     if (current.authenticated) {
       await nativeBrowser('login', { alreadyAuthenticated: true });
       this.onAuthUpdate(current);
-      this.onLog('success', `已登录账号: ${current.user.name}${current.user.email ? ' (' + current.user.email + ')' : ''}`);
+      this.onLog(
+        'success',
+        `已登录账号: ${current.user.name}${current.user.email ? ' (' + current.user.email + ')' : ''}`
+      );
       return current;
     }
 
@@ -150,7 +147,10 @@ class SystemFigmaBrowser {
           this.loginCheck = null;
           await nativeBrowser('hide_login');
           this.onAuthUpdate(auth);
-          this.onLog('success', `登录成功！当前账号: ${auth.user.name}${auth.user.email ? ' (' + auth.user.email + ')' : ''}`);
+          this.onLog(
+            'success',
+            `登录成功！当前账号: ${auth.user.name}${auth.user.email ? ' (' + auth.user.email + ')' : ''}`
+          );
         } else if (auth.windowVisible === false) {
           clearInterval(this.loginCheck);
           this.loginCheck = null;
@@ -184,11 +184,11 @@ class SystemFigmaBrowser {
 const controllerReady = Promise.resolve().then(async () => {
   paths = await disk('paths');
   const { createAppController } = require('./appController');
-  const { ElectronFigmaExporter } = require('./electronExporter');
-  const { ElectronFigmaImporter } = require('./electronImporter');
+  const { FigmaExporter } = require('./exporter');
+  const { FigmaImporter } = require('./importer');
   const { inferFigmaTitleFromPath } = require('./utils');
 
-  class Exporter extends ElectronFigmaExporter {
+  class Exporter extends FigmaExporter {
     exportSingleFile(file, targetPath, { timeoutSec, silentExport }) {
       return nativeBrowser('download', {
         editorUrl: this.buildFileUrl(file),
@@ -199,7 +199,7 @@ const controllerReady = Promise.resolve().then(async () => {
     }
   }
 
-  class Importer extends ElectronFigmaImporter {
+  class Importer extends FigmaImporter {
     async importSingleFile(file, destination, existingKeys, { timeoutSec, silentImport }) {
       const title = (file.title || inferFigmaTitleFromPath(file.localPath)).trim();
       return nativeBrowser('upload', {
@@ -215,19 +215,87 @@ const controllerReady = Promise.resolve().then(async () => {
   }
 
   const controller = createAppController({
-    app: { getPath: name => paths[name] }, path: localPath, platform: paths.platform, storage,
-    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
-    dialog: { showOpenDialog: (_, options) => disk('choose', { options }) },
-    shell: { openPath: path => disk('open_folder', { path }) },
-    Browser: SystemFigmaBrowser, Exporter, Importer,
-    getMainWindow: () => null,
-    sendToRenderer: (name, value) => {
+    paths,
+    path: localPath,
+    platform: paths.platform,
+    storage,
+    registerHandler: (name, handler) => handlers.set(name, handler),
+    chooseOpenDialog: (options) => disk('choose', { options }),
+    openFolder: (p) => disk('open_folder', { path: p }),
+    Browser: SystemFigmaBrowser,
+    Exporter,
+    Importer,
+    emitEvent: (name, value) => {
       const snapshot = JSON.parse(JSON.stringify(value));
-      for (const fn of listeners.get(name) || []) fn(null, snapshot);
+      for (const fn of listeners.get(name) || []) fn(snapshot);
     },
   });
   await controller.start();
+
+  handlers.set('app:version', () => nativeUpdater('version'));
+  handlers.set('app:check-update', () => nativeUpdater('check'));
+  handlers.set('app:get-update-state', () => nativeUpdater('state'));
+  handlers.set('app:download-update', () => nativeUpdater('download'));
+  handlers.set('app:install-update', async () => {
+    if (controller.isBusy()) {
+      throw new Error('当前有扫描、导入或导出任务正在运行，请等待完成或停止任务后再重启更新');
+    }
+    controller.close();
+    return nativeUpdater('install');
+  });
+  handlers.set('app:open-releases', () => nativeUpdater('open_url', { kind: 'releases' }));
+  handlers.set('app:open-github', () => nativeUpdater('open_url', { kind: 'github' }));
+  handlers.set('app:open-website', () => nativeUpdater('open_url', { kind: 'website' }));
+
+  void tauri.event.listen('app:update_state', ({ payload }) => {
+    for (const fn of listeners.get('event:update_state') || []) {
+      fn(payload);
+    }
+  });
 });
+
+window.figmaExporter = {
+  getState: () => invokeChannel('state:get'),
+  getVersion: () => invokeChannel('app:version'),
+  checkForUpdates: () => invokeChannel('app:check-update'),
+  getUpdateState: () => invokeChannel('app:get-update-state'),
+  downloadUpdate: () => invokeChannel('app:download-update'),
+  installUpdate: () => invokeChannel('app:install-update'),
+  openReleases: () => invokeChannel('app:open-releases'),
+  openGithub: () => invokeChannel('app:open-github'),
+  openWebsite: () => invokeChannel('app:open-website'),
+  login: () => invokeChannel('auth:login'),
+  logout: () => invokeChannel('auth:logout'),
+  scan: (opts) => invokeChannel('scan:start', opts),
+  addTeam: (input) => invokeChannel('teams:add', input),
+  removeTeam: (teamId) => invokeChannel('teams:remove', teamId),
+  saveSettings: (settings) => invokeChannel('settings:save', settings),
+  chooseDir: () => invokeChannel('dialog:choose-dir'),
+  openFolder: (dir) => invokeChannel('shell:open-folder', dir),
+
+  // 批量导出
+  startExport: (opts) => invokeChannel('export:start', opts),
+  stopExport: () => invokeChannel('export:stop'),
+
+  // 批量导入
+  pickImportFiles: () => invokeChannel('import:pick-files'),
+  pickImportFolder: () => invokeChannel('import:pick-folder'),
+  addImportPaths: (p) => invokeChannel('import:add-paths', p),
+  removeImportItems: (ids) => invokeChannel('import:remove-items', ids),
+  clearImportQueue: () => invokeChannel('import:clear'),
+  loadImportTargets: () => invokeChannel('import:targets'),
+  createFigmaFolder: (opts) => invokeChannel('import:create-folder', opts),
+  startImport: (opts) => invokeChannel('import:start', opts),
+  stopImport: () => invokeChannel('import:stop'),
+
+  // 实时事件订阅
+  onLog: (cb) => subscribeChannel('event:log', cb),
+  onAuthUpdate: (cb) => subscribeChannel('event:auth_update', cb),
+  onScanProgress: (cb) => subscribeChannel('event:scan_progress', cb),
+  onExportProgress: (cb) => subscribeChannel('event:export_progress', cb),
+  onImportProgress: (cb) => subscribeChannel('event:import_progress', cb),
+  onUpdateState: (cb) => subscribeChannel('event:update_state', cb),
+};
 
 function connectNativeWindow() {
   const dropzone = () => document.getElementById('importDropzone');
@@ -246,7 +314,7 @@ function connectNativeWindow() {
     dropzone()?.classList.remove('drag-over');
   });
 
-  window.figmaExporter.onDroppedPaths = callback => {
+  window.figmaExporter.onDroppedPaths = (callback) => {
     void tauri.event.listen('tauri://drag-drop', ({ payload }) => {
       dropzone()?.classList.remove('drag-over');
       callback(payload.paths || []);
@@ -255,7 +323,7 @@ function connectNativeWindow() {
 
   const header = document.querySelector('.window-topbar');
   if (header) {
-    header.addEventListener('mousedown', event => {
+    header.addEventListener('mousedown', (event) => {
       if (event.button !== 0) return;
       if (event.target.closest('button, input, select, a, [role="menu"], .popover-menu')) return;
       const currentWin = tauri.window.getCurrentWindow();

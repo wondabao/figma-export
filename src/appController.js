@@ -1,7 +1,19 @@
 const { FigmaScanner } = require('./scanner');
 const { parseTeamIdInput } = require('./utils');
 
-function createAppController({ app, ipcMain, dialog, shell, path, storage, Browser, Exporter, Importer, getMainWindow, sendToRenderer, platform }) {
+function createAppController({
+  paths,
+  registerHandler,
+  chooseOpenDialog,
+  openFolder,
+  path,
+  storage,
+  Browser,
+  Exporter,
+  Importer,
+  emitEvent,
+  platform,
+}) {
   let browserManager = null;
   let scanner = null;
   let exporter = null;
@@ -17,7 +29,7 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
 
   async function loadConfig() {
     const defaults = {
-      outputDir: path.join(app.getPath('documents'), 'Figma Exports'),
+      outputDir: path.join(paths.documents, 'Figma Exports'),
       extraTeamIds: [],
       includeDrafts: true,
       skipExported: true,
@@ -29,8 +41,9 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       importSkipExisting: true,
       importSilent: true,
       importTimeoutSec: 240,
+      cachedUser: null,
     };
-    return { ...defaults, ...await storage.loadConfig() };
+    return { ...defaults, ...(await storage.loadConfig()) };
   }
 
   async function saveConfig(cfg) {
@@ -46,7 +59,7 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
     };
     logs.push(entry);
     if (logs.length > 500) logs.shift();
-    sendToRenderer('event:log', entry);
+    emitEvent('event:log', entry);
   }
 
   function mergeIntoImportQueue(newItems) {
@@ -62,33 +75,61 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
     return added;
   }
 
+  async function syncCachedUser(authState) {
+    const nextUser = authState && authState.authenticated && authState.user ? authState.user : null;
+    const prevJson = JSON.stringify(config.cachedUser || null);
+    const nextJson = JSON.stringify(nextUser);
+    if (prevJson !== nextJson) {
+      config.cachedUser = nextUser;
+      try {
+        await saveConfig(config);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   async function initServices() {
     config = await loadConfig();
 
     browserManager = new Browser(addLog, (authState) => {
-      sendToRenderer('event:auth_update', authState);
+      void syncCachedUser(authState);
+      emitEvent('event:auth_update', authState);
     });
+    if (config.cachedUser) {
+      browserManager.user = config.cachedUser;
+    }
 
-    scanner = new FigmaScanner(browserManager, addLog, (progress) => {
-      sendToRenderer('event:scan_progress', progress);
-    }, storage);
+    scanner = new FigmaScanner(
+      browserManager,
+      addLog,
+      (progress) => {
+        emitEvent('event:scan_progress', progress);
+      },
+      storage
+    );
 
-    exporter = new Exporter(browserManager, addLog, (progress) => {
-      if (lastScanResult && progress.fileKey && progress.type === 'file_done') {
-        const target = lastScanResult.files.find((f) => f.key === progress.fileKey);
-        if (target) {
-          if (progress.status === 'exported' || progress.status === 'skipped') {
-            target.backupStatus = 'exported';
-            if (progress.fileSize) target.fileSize = progress.fileSize;
-            target.lastError = null;
-          } else if (progress.status === 'failed') {
-            target.backupStatus = 'failed';
-            target.lastError = progress.error || '导出失败';
+    exporter = new Exporter(
+      browserManager,
+      addLog,
+      (progress) => {
+        if (lastScanResult && progress.fileKey && progress.type === 'file_done') {
+          const target = lastScanResult.files.find((f) => f.key === progress.fileKey);
+          if (target) {
+            if (progress.status === 'exported' || progress.status === 'skipped') {
+              target.backupStatus = 'exported';
+              if (progress.fileSize) target.fileSize = progress.fileSize;
+              target.lastError = null;
+            } else if (progress.status === 'failed') {
+              target.backupStatus = 'failed';
+              target.lastError = progress.error || '导出失败';
+            }
           }
         }
-      }
-      sendToRenderer('event:export_progress', progress);
-    }, storage);
+        emitEvent('event:export_progress', progress);
+      },
+      storage
+    );
 
     importer = new Importer(browserManager, scanner, addLog, (progress) => {
       if (progress.fileId && progress.type === 'file_done') {
@@ -99,26 +140,33 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
           target.error = progress.status === 'failed' ? progress.error || '导入失败' : null;
         }
       }
-      sendToRenderer('event:import_progress', progress);
+      emitEvent('event:import_progress', progress);
     });
   }
 
-  function registerIpcHandlers() {
-    ipcMain.handle('state:get', async () => {
+  function registerHandlers() {
+    registerHandler('state:get', async () => {
       browserManager
         .checkAuthStatus()
         .then((auth) => {
-          sendToRenderer('event:auth_update', {
+          if (!auth.authenticated && auth.transient && config.cachedUser) {
+            browserManager.user = config.cachedUser;
+            return;
+          }
+          const authPayload = {
             authenticated: auth.authenticated,
             user: auth.user,
-          });
+          };
+          void syncCachedUser(authPayload);
+          emitEvent('event:auth_update', authPayload);
         })
         .catch(() => {});
 
+      const effectiveUser = browserManager.user || config.cachedUser || null;
       return {
         auth: {
-          authenticated: Boolean(browserManager.user),
-          user: browserManager.user,
+          authenticated: Boolean(effectiveUser),
+          user: effectiveUser,
         },
         config,
         isScanning,
@@ -129,26 +177,28 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
         importStatus: importer.getStatus(),
         logs: logs.slice(-150),
         platform,
-        homeDir: app.getPath('home'),
+        homeDir: paths.home,
       };
     });
 
-    ipcMain.handle('auth:login', async () => {
-      const status = await browserManager.openLoginWindow(getMainWindow());
+    registerHandler('auth:login', async () => {
+      const status = await browserManager.openLoginWindow();
       return { ok: true, auth: { authenticated: status.authenticated, user: status.user } };
     });
 
-    ipcMain.handle('auth:logout', async () => {
+    registerHandler('auth:logout', async () => {
       if (isScanning || exporter.isRunning || importer.isRunning || startingTask) {
         throw new Error('当前有任务正在运行中，请先停止任务后再切换账号');
       }
       await browserManager.logoutAndResetProfile();
+      config.cachedUser = null;
+      await saveConfig(config);
       lastScanResult = null;
       lastImportTargets = null;
       return { ok: true };
     });
 
-    ipcMain.handle('scan:start', async (_event, opts = {}) => {
+    registerHandler('scan:start', async (opts = {}) => {
       if (isScanning) throw new Error('正在扫描中，请稍候...');
       if (exporter.isRunning || importer.isRunning) throw new Error('当前有导入/导出任务运行中，请稍后再试');
 
@@ -163,7 +213,6 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
           includeDrafts,
         });
         lastScanResult = result;
-        // 同步更新导入可用目标列表
         lastImportTargets = {
           user: result.user,
           draftsFolderId: result.user?.draftsFolderId || null,
@@ -185,7 +234,7 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       }
     });
 
-    ipcMain.handle('teams:add', async (_event, input) => {
+    registerHandler('teams:add', async (input) => {
       const teamId = parseTeamIdInput(input);
       if (!teamId) {
         throw new Error('无法解析 Team ID，请粘贴包含 /team/数字 的 Figma 团队链接或纯数字 Team ID');
@@ -198,14 +247,14 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       return { ok: true, teamId, extraTeamIds: config.extraTeamIds };
     });
 
-    ipcMain.handle('teams:remove', async (_event, teamId) => {
+    registerHandler('teams:remove', async (teamId) => {
       const idStr = String(teamId || '');
       config.extraTeamIds = config.extraTeamIds.filter((id) => id !== idStr);
       await saveConfig(config);
       return { ok: true, extraTeamIds: config.extraTeamIds };
     });
 
-    ipcMain.handle('settings:save', async (_event, body = {}) => {
+    registerHandler('settings:save', async (body = {}) => {
       if (typeof body.outputDir === 'string' && body.outputDir.trim()) {
         config.outputDir = path.resolve(body.outputDir.trim());
       }
@@ -231,8 +280,8 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       return { ok: true, config };
     });
 
-    ipcMain.handle('dialog:choose-dir', async () => {
-      const res = await dialog.showOpenDialog(getMainWindow(), {
+    registerHandler('dialog:choose-dir', async () => {
+      const res = await chooseOpenDialog({
         title: '选择 Figma 导出目录',
         defaultPath: config.outputDir,
         properties: ['openDirectory', 'createDirectory'],
@@ -245,16 +294,15 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       return { canceled: false, dir: config.outputDir };
     });
 
-    ipcMain.handle('shell:open-folder', async (_event, dir) => {
+    registerHandler('shell:open-folder', async (dir) => {
       const target = dir && dir.trim() ? path.resolve(dir.trim()) : config.outputDir;
       await storage.ensureDir(target);
-      const errMsg = await shell.openPath(target);
+      const errMsg = await openFolder(target);
       if (errMsg) throw new Error(errMsg);
       return { ok: true, dir: target };
     });
 
-    // ========== 批量导出 IPC ==========
-    ipcMain.handle('export:start', async (_event, body = {}) => {
+    registerHandler('export:start', async (body = {}) => {
       if (isScanning || exporter.isRunning || importer.isRunning || startingTask) {
         throw new Error('当前已有导入或导出任务正在运行中');
       }
@@ -311,14 +359,13 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       return { ok: true, total: selectedFiles.length, outputDir };
     });
 
-    ipcMain.handle('export:stop', async () => {
+    registerHandler('export:stop', async () => {
       exporter.requestStop();
       return { ok: true };
     });
 
-    // ========== 批量导入 IPC ==========
-    ipcMain.handle('import:pick-files', async () => {
-      const res = await dialog.showOpenDialog(getMainWindow(), {
+    registerHandler('import:pick-files', async () => {
+      const res = await chooseOpenDialog({
         title: '选择要导入 Figma 的设计文件',
         properties: ['openFile', 'multiSelections'],
         filters: [
@@ -334,8 +381,8 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       return { canceled: false, queue: importQueue, added };
     });
 
-    ipcMain.handle('import:pick-folder', async () => {
-      const res = await dialog.showOpenDialog(getMainWindow(), {
+    registerHandler('import:pick-folder', async () => {
+      const res = await chooseOpenDialog({
         title: '选择包含设计文件的本地文件夹（自动递归扫描子目录）',
         defaultPath: config.outputDir,
         properties: ['openDirectory', 'multiSelections'],
@@ -353,8 +400,8 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       return { canceled: false, queue: importQueue, added, scannedCount: found.length };
     });
 
-    ipcMain.handle('import:add-paths', async (_event, paths = []) => {
-      const found = await storage.collectLocalImportFiles(paths);
+    registerHandler('import:add-paths', async (inputPaths = []) => {
+      const found = await storage.collectLocalImportFiles(inputPaths);
       const added = mergeIntoImportQueue(found);
       if (added > 0) {
         addLog('info', `通过拖拽新增 ${added} 个待导入文件（当前队列共 ${importQueue.length} 个）`);
@@ -362,20 +409,20 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       return { ok: true, queue: importQueue, added };
     });
 
-    ipcMain.handle('import:remove-items', async (_event, ids = []) => {
+    registerHandler('import:remove-items', async (ids = []) => {
       if (importer.isRunning) throw new Error('正在导入中，无法移除队列项');
       const removeSet = new Set(ids);
       importQueue = importQueue.filter((item) => !removeSet.has(item.id));
       return { ok: true, queue: importQueue };
     });
 
-    ipcMain.handle('import:clear', async () => {
+    registerHandler('import:clear', async () => {
       if (importer.isRunning) throw new Error('正在导入中，无法清空队列');
       importQueue = [];
       return { ok: true, queue: importQueue };
     });
 
-    ipcMain.handle('import:targets', async () => {
+    registerHandler('import:targets', async () => {
       addLog('info', '正在拉取可用于导入的团队与文件夹列表...');
       const targets = await scanner.listTargets({ extraTeamIds: config.extraTeamIds });
       lastImportTargets = targets;
@@ -383,7 +430,7 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       return { ok: true, targets };
     });
 
-    ipcMain.handle('import:create-folder', async (_event, { teamId, folderName } = {}) => {
+    registerHandler('import:create-folder', async ({ teamId, folderName } = {}) => {
       const folder = await scanner.createFolder(teamId, folderName);
       if (lastImportTargets && Array.isArray(lastImportTargets.teams)) {
         const team = lastImportTargets.teams.find((t) => t.id === String(teamId));
@@ -394,7 +441,7 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       return { ok: true, folder, targets: lastImportTargets };
     });
 
-    ipcMain.handle('import:start', async (_event, body = {}) => {
+    registerHandler('import:start', async (body = {}) => {
       if (isScanning || exporter.isRunning || importer.isRunning || startingTask) {
         throw new Error('当前已有导入或导出任务正在运行中');
       }
@@ -449,7 +496,7 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
       return { ok: true, total: selectedFiles.length };
     });
 
-    ipcMain.handle('import:stop', async () => {
+    registerHandler('import:stop', async () => {
       importer.requestStop();
       return { ok: true };
     });
@@ -458,7 +505,10 @@ function createAppController({ app, ipcMain, dialog, shell, path, storage, Brows
   return {
     async start() {
       await initServices();
-      registerIpcHandlers();
+      registerHandlers();
+    },
+    isBusy() {
+      return Boolean(isScanning || exporter?.isRunning || importer?.isRunning || startingTask);
     },
     close() {
       browserManager?.closeWindows();

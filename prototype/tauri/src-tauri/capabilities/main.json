@@ -5,6 +5,7 @@
   "permissions": [
     "allow-local-files",
     "allow-figma-browser",
+    "allow-app-updater",
     "core:event:allow-listen",
     "core:window:allow-start-dragging",
     "core:window:allow-toggle-maximize"

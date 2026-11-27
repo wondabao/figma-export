@@ -17,8 +17,13 @@ jobs:
         include:
           - os: macos-15
             platform: mac
+            rust_target: aarch64-apple-darwin
+          - os: macos-15
+            platform: mac
+            rust_target: x86_64-apple-darwin
           - os: windows-2025
             platform: win
+            rust_target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.os }}
 
@@ -34,24 +39,41 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: prototype/tauri/src-tauri
+
       - name: Install dependencies
-        run: npm ci
+        run: npm --prefix prototype/tauri ci
 
       - name: Verify release version
         if: github.ref_type == 'tag'
-        run: node -e "if (process.env.GITHUB_REF_NAME !== 'v' + require('./package.json').version) throw new Error('Tag must match the package version')"
+        run: |
+          node -e "
+            const tag = process.env.GITHUB_REF_NAME;
+            const rootVer = 'v' + require('./package.json').version;
+            const tauriVer = 'v' + require('./prototype/tauri/src-tauri/tauri.conf.json').version;
+            if (tag !== rootVer || tag !== tauriVer) {
+              throw new Error('Tag must match package.json and tauri.conf.json versions');
+            }
+          "
 
-      - name: Build installer
-        run: npm run build:${{ matrix.platform }} -- --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Build Tauri installer
+        run: node prototype/tauri/build-release.cjs --target ${{ matrix.rust_target }}
 
-      - name: Verify macOS disk images
+      - name: Verify macOS disk image
         if: matrix.platform == 'mac'
         shell: bash
         run: |
-          hdiutil verify dist/figma-export-*-mac-arm64.dmg
-          hdiutil verify dist/figma-export-*-mac-x64.dmg
+          for dmg in dist/figma-export-*-mac-*.dmg; do
+            hdiutil verify "$dmg"
+          done
 
       - name: Test Windows installer
         if: matrix.platform == 'win'
@@ -59,11 +81,10 @@ jobs:
         timeout-minutes: 5
         run: |
           $setup = Get-Item 'dist/figma-export-*-win-x64-setup.exe'
-          $portable = Get-Item 'dist/figma-export-*-win-x64-portable.exe'
-          if (!$setup -or !$portable) { throw 'Missing Windows installer or portable build' }
-          $installDir = Join-Path $env:RUNNER_TEMP 'FigmaBulkExporter'
-          $install = Start-Process -FilePath $setup.FullName -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
-          if ($install.ExitCode -ne 0 -or !(Test-Path "$installDir/resources/app.asar")) {
+          if (!$setup) { throw 'Missing Windows installer build' }
+          $installDir = Join-Path $env:RUNNER_TEMP 'FigmaExport'
+          $install = Start-Process -FilePath $setup.FullName -ArgumentList "/S /D=$installDir" -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
             throw "Silent installation failed with exit code $($install.ExitCode)"
           }
           if (!(Get-ChildItem $installDir -Filter '*.exe' | Where-Object { $_.Name -notlike 'Uninstall*' })) {
@@ -73,7 +94,7 @@ jobs:
       - name: Upload installers
         uses: actions/upload-artifact@v7
         with:
-          name: installer-${{ matrix.platform }}
+          name: installer-${{ matrix.rust_target }}
           path: |
             dist/figma-export-*.dmg
             dist/figma-export-*.exe
@@ -106,7 +127,6 @@ jobs:
             "figma-export-$version-mac-arm64.dmg"
             "figma-export-$version-mac-x64.dmg"
             "figma-export-$version-win-x64-setup.exe"
-            "figma-export-$version-win-x64-portable.exe"
           )
           sha256sum "${files[@]}" > SHA256SUMS.txt
           gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes "${files[@]}" SHA256SUMS.txt

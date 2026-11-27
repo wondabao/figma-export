@@ -6,6 +6,7 @@
     doc: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
     users: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
     folder: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
+    triangle: `<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2.3 3.9a.65.65 0 0 1 .52-.26h6.36a.65.65 0 0 1 .52 1.04L6.52 8.92a.65.65 0 0 1-1.04 0L2.3 4.68a.65.65 0 0 1 0-.78Z"/></svg>`,
   };
 
   const state = {
@@ -68,18 +69,15 @@
     // 左侧导航栏
     sidebarBrandTitle: document.getElementById('sidebarBrandTitle'),
     navSectionLabel: document.getElementById('navSectionLabel'),
+    btnHeaderAddTeam: document.getElementById('btnHeaderAddTeam'),
     workspaceNavList: document.getElementById('workspaceNavList'),
-    btnNavFailed: document.getElementById('btnNavFailed'),
-    navFailedCount: document.getElementById('navFailedCount'),
-    btnOpenAddTeamModal: document.getElementById('btnOpenAddTeamModal'),
-    navBottomActionText: document.getElementById('navBottomActionText'),
+    navFooter: document.getElementById('navFooter'),
+    btnNavAddFiles: document.getElementById('btnNavAddFiles'),
 
     // 中栏 A：导出
     exportCenterCard: document.getElementById('exportCenterCard'),
-    exportOverviewMeta: document.getElementById('exportOverviewMeta'),
     btnScan: document.getElementById('btnScan'),
     scanIcon: document.getElementById('scanIcon'),
-    btnScanText: document.getElementById('btnScanText'),
     searchInput: document.getElementById('searchInput'),
     btnExportFilterToggle: document.getElementById('btnExportFilterToggle'),
     exportFilterDot: document.getElementById('exportFilterDot'),
@@ -89,14 +87,16 @@
     btnResetExportFilters: document.getElementById('btnResetExportFilters'),
     btnToggleExpand: document.getElementById('btnToggleExpand'),
     expandBtnText: document.getElementById('expandBtnText'),
+    exportTableHead: document.getElementById('exportTableHead'),
     exportMasterCb: document.getElementById('exportMasterCb'),
     treeContainer: document.getElementById('treeContainer'),
+    exportCenterFooter: document.getElementById('exportCenterFooter'),
     selectionSummary: document.getElementById('selectionSummary'),
     btnClearOrSelectAll: document.getElementById('btnClearOrSelectAll'),
 
     // 中栏 B：导入
     importCenterCard: document.getElementById('importCenterCard'),
-    importOverviewMeta: document.getElementById('importOverviewMeta'),
+    importPickerActions: document.getElementById('importPickerActions'),
     btnPickImportFiles: document.getElementById('btnPickImportFiles'),
     btnPickImportFolder: document.getElementById('btnPickImportFolder'),
     importSearchInput: document.getElementById('importSearchInput'),
@@ -108,8 +108,10 @@
     btnResetImportFilters: document.getElementById('btnResetImportFilters'),
     btnClearImportQueue: document.getElementById('btnClearImportQueue'),
     importDropzone: document.getElementById('importDropzone'),
+    importTableHead: document.getElementById('importTableHead'),
     importMasterCb: document.getElementById('importMasterCb'),
     importTreeContainer: document.getElementById('importTreeContainer'),
+    importCenterFooter: document.getElementById('importCenterFooter'),
     importSelectionSummary: document.getElementById('importSelectionSummary'),
     btnImportClearOrSelectAll: document.getElementById('btnImportClearOrSelectAll'),
 
@@ -135,6 +137,9 @@
     optImportSilent: document.getElementById('optImportSilent'),
     optImportTimeoutSec: document.getElementById('optImportTimeoutSec'),
 
+    settingsShellCard: document.getElementById('settingsShellCard'),
+    idleCtaStack: document.getElementById('idleCtaStack'),
+    progressCard: document.getElementById('progressCard'),
     progressTitle: document.getElementById('progressTitle'),
     progressPct: document.getElementById('progressPct'),
     progressFill: document.getElementById('progressFill'),
@@ -154,6 +159,15 @@
     btnClearLogs: document.getElementById('btnClearLogs'),
     btnCloseLogDrawer: document.getElementById('btnCloseLogDrawer'),
     logConsole: document.getElementById('logConsole'),
+    btnVersion: document.getElementById('btnVersion'),
+    versionModal: document.getElementById('versionModal'),
+    btnCloseVersion: document.getElementById('btnCloseVersion'),
+    versionCurrent: document.getElementById('versionCurrent'),
+    versionStatus: document.getElementById('versionStatus'),
+    btnCheckUpdate: document.getElementById('btnCheckUpdate'),
+    btnUpdateAction: document.getElementById('btnUpdateAction'),
+    versionProgressWrap: document.getElementById('versionProgressWrap'),
+    versionProgressFill: document.getElementById('versionProgressFill'),
 
     addTeamModal: document.getElementById('addTeamModal'),
     btnCloseTeamModal: document.getElementById('btnCloseTeamModal'),
@@ -164,8 +178,225 @@
 
   function cleanError(err) {
     const raw = (err && err.message) || String(err || '未知错误');
-    return raw.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/i, '');
+    return raw.replace(/^Error:\s*/i, '');
   }
+
+  let currentUpdateState = null;
+
+  function renderUpdateUI(u) {
+    if (!u) return;
+    currentUpdateState = u;
+
+    if (u.currentVersion) {
+      el.btnVersion.textContent = `v${u.currentVersion}`;
+      el.versionCurrent.textContent = `当前版本 v${u.currentVersion}`;
+    }
+
+    const hasUpdate = Boolean(u.available);
+    el.btnVersion.classList.toggle('has-update', hasUpdate);
+    if (u.status === 'downloaded') {
+      el.btnVersion.title = `新版本 v${u.latestVersion} 已就绪，点击重启更新`;
+    } else if (hasUpdate) {
+      el.btnVersion.title = `发现新版本 v${u.latestVersion}`;
+    } else {
+      el.btnVersion.title = '查看版本与更新';
+    }
+    el.btnVersion.setAttribute('aria-label', el.btnVersion.title);
+
+    const isProgressPhase =
+      u.status === 'downloading' || u.status === 'verifying' || u.status === 'staging';
+    el.versionProgressWrap.classList.toggle('hidden', !isProgressPhase);
+    if (isProgressPhase) {
+      el.versionProgressFill.style.width = `${Math.max(2, u.percent || 0)}%`;
+    }
+
+    switch (u.status) {
+      case 'checking':
+        el.versionStatus.textContent = '正在检查更新…';
+        el.btnCheckUpdate.classList.remove('hidden');
+        el.btnCheckUpdate.disabled = true;
+        el.btnCheckUpdate.textContent = '检查更新';
+        el.btnUpdateAction.classList.add('hidden');
+        break;
+
+      case 'up-to-date':
+        el.versionStatus.textContent =
+          u.comparison < 0 && u.latestVersion
+            ? `最新发布版本为 v${u.latestVersion}`
+            : '当前已是最新版本';
+        el.btnCheckUpdate.classList.remove('hidden');
+        el.btnCheckUpdate.disabled = false;
+        el.btnCheckUpdate.textContent = '检查更新';
+        el.btnUpdateAction.classList.add('hidden');
+        break;
+
+      case 'available':
+        if (u.canInstallInPlace) {
+          const sizeLabel = u.assetSize > 0 ? `（约 ${formatBytes(u.assetSize)}）` : '';
+          el.versionStatus.textContent = `发现新版本 v${u.latestVersion}${sizeLabel}`;
+          el.btnCheckUpdate.classList.add('hidden');
+          el.btnUpdateAction.classList.remove('hidden');
+          el.btnUpdateAction.disabled = false;
+          el.btnUpdateAction.dataset.mode = 'download';
+          el.btnUpdateAction.textContent = '立即更新';
+        } else {
+          el.versionStatus.textContent = `发现新版本 v${u.latestVersion} · ${u.manualReason || '请前往发布页下载'}`;
+          el.btnCheckUpdate.classList.add('hidden');
+          el.btnUpdateAction.classList.remove('hidden');
+          el.btnUpdateAction.disabled = false;
+          el.btnUpdateAction.dataset.mode = 'manual';
+          el.btnUpdateAction.textContent = '前往下载';
+        }
+        break;
+
+      case 'downloading': {
+        const sizeProgress =
+          u.totalBytes > 0
+            ? `（${formatBytes(u.transferredBytes)} / ${formatBytes(u.totalBytes)}）`
+            : `（${formatBytes(u.transferredBytes)}）`;
+        el.versionStatus.textContent = `正在下载 v${u.latestVersion}… ${u.percent || 0}% ${sizeProgress}`;
+        el.btnCheckUpdate.classList.add('hidden');
+        el.btnUpdateAction.classList.remove('hidden');
+        el.btnUpdateAction.disabled = true;
+        el.btnUpdateAction.textContent = `下载中 ${u.percent || 0}%`;
+        break;
+      }
+
+      case 'verifying':
+        el.versionStatus.textContent = '正在校验安装包完整性…';
+        el.btnCheckUpdate.classList.add('hidden');
+        el.btnUpdateAction.classList.remove('hidden');
+        el.btnUpdateAction.disabled = true;
+        el.btnUpdateAction.textContent = '正在校验…';
+        break;
+
+      case 'staging':
+        el.versionStatus.textContent = '正在解压并准备新版本…';
+        el.btnCheckUpdate.classList.add('hidden');
+        el.btnUpdateAction.classList.remove('hidden');
+        el.btnUpdateAction.disabled = true;
+        el.btnUpdateAction.textContent = '正在准备…';
+        break;
+
+      case 'downloaded':
+        el.versionStatus.textContent = `新版本 v${u.latestVersion} 已就绪，重启即可完成更新`;
+        el.btnCheckUpdate.classList.add('hidden');
+        el.btnUpdateAction.classList.remove('hidden');
+        el.btnUpdateAction.disabled = false;
+        el.btnUpdateAction.dataset.mode = 'restart';
+        el.btnUpdateAction.textContent = '立即重启';
+        break;
+
+      case 'error':
+        el.versionStatus.textContent = u.error || '检查或下载更新失败，请重试。';
+        if (hasUpdate && u.canInstallInPlace) {
+          el.btnCheckUpdate.classList.add('hidden');
+          el.btnUpdateAction.classList.remove('hidden');
+          el.btnUpdateAction.disabled = false;
+          el.btnUpdateAction.dataset.mode = 'download';
+          el.btnUpdateAction.textContent = '重试更新';
+        } else {
+          el.btnCheckUpdate.classList.remove('hidden');
+          el.btnCheckUpdate.disabled = false;
+          el.btnCheckUpdate.textContent = '检查更新';
+          el.btnUpdateAction.classList.add('hidden');
+        }
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  async function checkUpdates() {
+    try {
+      const result = await bridge.checkForUpdates();
+      renderUpdateUI(result);
+    } catch {
+      if (!currentUpdateState || currentUpdateState.status !== 'error') {
+        el.versionStatus.textContent = '检查更新失败，请检查网络后重试。';
+        el.btnCheckUpdate.disabled = false;
+      }
+    }
+  }
+
+  el.btnVersion.addEventListener('click', () => {
+    el.versionModal.showModal();
+    el.btnCloseVersion.focus();
+  });
+  function closeVersionModal() {
+    el.versionModal.close();
+  }
+  el.btnCloseVersion.addEventListener('click', closeVersionModal);
+  el.versionModal.addEventListener('click', (event) => {
+    if (event.target !== el.versionModal) return;
+    const bounds = el.versionModal.getBoundingClientRect();
+    if (event.clientX < bounds.left || event.clientX > bounds.right ||
+        event.clientY < bounds.top || event.clientY > bounds.bottom) closeVersionModal();
+  });
+  document.getElementById('btnOpenGithub').addEventListener('click', async () => {
+    try {
+      await bridge.openGithub();
+    } catch {
+      alert('无法打开默认浏览器。项目地址为 https://github.com/wondabao/figma-export');
+    }
+  });
+  for (const button of el.versionModal.querySelectorAll('[data-policy]')) {
+    button.addEventListener('click', () => {
+      const reader = document.getElementById('policyReader');
+      reader.title = button.firstChild.textContent.trim();
+      reader.src = `./legal/${button.dataset.policy}.html`;
+      document.getElementById('policyModal').showModal();
+    });
+  }
+  document.getElementById('btnOpenWebsite').addEventListener('click', async () => {
+    try {
+      await bridge.openWebsite();
+    } catch {
+      alert('无法打开默认浏览器。官网地址为 https://www.yypic.com');
+    }
+  });
+  el.btnCheckUpdate.addEventListener('click', checkUpdates);
+  el.btnUpdateAction.addEventListener('click', async () => {
+    const mode = el.btnUpdateAction.dataset.mode;
+    if (mode === 'restart') {
+      try {
+        el.btnUpdateAction.disabled = true;
+        el.btnUpdateAction.textContent = '正在重启…';
+        await bridge.installUpdate();
+      } catch (err) {
+        el.btnUpdateAction.disabled = false;
+        el.btnUpdateAction.textContent = '立即重启';
+        alert(cleanError(err));
+      }
+      return;
+    }
+    if (mode === 'download') {
+      try {
+        await bridge.downloadUpdate();
+      } catch {
+        // 状态文案已由 event:update_state 更新
+      }
+      return;
+    }
+    try {
+      await bridge.openReleases();
+    } catch {
+      el.versionStatus.textContent = '无法打开下载页面，请重试。';
+    }
+  });
+
+  if (typeof bridge.onUpdateState === 'function') {
+    bridge.onUpdateState((uState) => renderUpdateUI(uState));
+  }
+
+  bridge.getVersion().then((version) => {
+    el.btnVersion.textContent = `v${version}`;
+    el.versionCurrent.textContent = `当前版本 v${version}`;
+  }).catch(() => {
+    el.versionCurrent.textContent = '无法获取当前版本';
+  });
+  void checkUpdates();
 
   function escapeHtml(str) {
     return String(str || '')
@@ -286,9 +517,9 @@
     el.tabImport.classList.toggle('active', isImport);
     el.tabImport.setAttribute('aria-selected', String(isImport));
 
-    el.sidebarBrandTitle.textContent = isImport ? 'Figma 导入' : 'Figma 备份';
     el.navSectionLabel.textContent = isImport ? '文件分组' : '工作空间';
-    el.navBottomActionText.textContent = isImport ? '添加文件' : '添加团队';
+    el.btnHeaderAddTeam.classList.toggle('hidden', isImport);
+    el.navFooter.classList.toggle('hidden', !isImport);
 
     el.exportCenterCard.classList.toggle('hidden', isImport);
     el.exportSettingsCard.classList.toggle('hidden', isImport);
@@ -316,12 +547,6 @@
   function renderSidebarNav() {
     if (state.mode === 'export') {
       const totalFiles = state.scanResult ? state.scanResult.files.length : 0;
-      const failedCount = state.scanResult
-        ? state.scanResult.files.filter((f) => f.backupStatus === 'failed').length
-        : 0;
-
-      el.navFailedCount.textContent = failedCount;
-      el.btnNavFailed.classList.toggle('active', state.activeWorkspaceFilter === '__failed__');
 
       const navItems = [
         `<button class="nav-item ${state.activeWorkspaceFilter === '__all__' ? 'active' : ''}" data-ws-filter="__all__" type="button">
@@ -350,10 +575,6 @@
     } else {
       // 导入模式左侧分组列表
       const totalFiles = state.importQueue.length;
-      const failedCount = state.importQueue.filter((f) => f.status === 'failed').length;
-
-      el.navFailedCount.textContent = failedCount;
-      el.btnNavFailed.classList.toggle('active', state.activeImportGroupFilter === '__failed__');
 
       const groupCounts = new Map();
       for (const item of state.importQueue) {
@@ -396,25 +617,18 @@
     }
   });
 
-  el.btnNavFailed.addEventListener('click', () => {
-    if (state.mode === 'export') {
-      state.activeWorkspaceFilter =
-        state.activeWorkspaceFilter === '__failed__' ? '__all__' : '__failed__';
-    } else {
-      state.activeImportGroupFilter =
-        state.activeImportGroupFilter === '__failed__' ? '__all__' : '__failed__';
-    }
-    renderAll();
-  });
-
-  el.btnOpenAddTeamModal.addEventListener('click', async () => {
-    if (state.mode === 'import') {
-      el.btnPickImportFiles.click();
-      return;
-    }
+  function openAddTeamModal() {
     renderExtraTeams();
     el.addTeamModal.classList.remove('hidden');
     el.manualTeamInput.focus();
+  }
+
+  el.btnHeaderAddTeam.addEventListener('click', () => {
+    openAddTeamModal();
+  });
+
+  el.btnNavAddFiles.addEventListener('click', () => {
+    el.btnPickImportFiles.click();
   });
 
   el.btnCloseTeamModal.addEventListener('click', () => {
@@ -473,13 +687,13 @@
     el.btnOpenFolder.title = `点击在系统中打开: ${state.config.outputDir || ''}`;
 
     el.scanIcon.classList.toggle('spinning', state.isScanning);
-    el.btnScanText.textContent = state.isScanning ? '扫描中...' : '重新扫描';
+    el.btnScan.title = state.isScanning ? '扫描中...' : '重新扫描';
+    el.btnScan.setAttribute('aria-label', el.btnScan.title);
     el.btnScan.disabled = state.isScanning || state.isExporting || state.isImporting;
 
     if (!state.scanResult) {
-      el.exportOverviewMeta.textContent = state.auth.authenticated
-        ? '点击右上角「重新扫描」拉取所有团队与设计文件'
-        : '请先点击右上角「登录 Figma」完成授权';
+      el.exportTableHead.classList.add('hidden');
+      el.exportCenterFooter.classList.add('hidden');
       el.exportMasterCb.checked = false;
       el.exportMasterCb.indeterminate = false;
       el.selectionSummary.textContent = '已选 0 个文件';
@@ -488,22 +702,31 @@
       el.treeContainer.innerHTML = `
         <div class="empty-box">
           ${ICONS.layers}
-          <h3>${state.auth.authenticated ? '尚未扫描云端空间' : '欢迎使用 Figma 备份'}</h3>
-          <p>${
+          <h3>${state.auth.authenticated ? '尚未扫描云端空间' : '欢迎使用 Figma Export'}</h3>
+          <p class="export-formats">支持 <code>.fig</code>、<code>.jam</code>、<code>.deck</code> 文件导出。</p>
+          ${
             state.auth.authenticated
-              ? '点击右上角「重新扫描」，自动发现你可见的所有团队、文件夹与个人草稿。'
-              : '第一步：点击顶部右上角「登录 Figma」完成登录；<br/>第二步：点击「重新扫描」拉取全部团队与文件夹。'
-          }</p>
+              ? `<button class="empty-scan-btn" data-empty-scan="1" type="button" ${state.isScanning || state.isExporting || state.isImporting ? 'disabled' : ''}>
+                   <svg class="${state.isScanning ? 'spinning' : ''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                     <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
+                   </svg>
+                   <span>${state.isScanning ? '扫描中...' : '开始扫描'}</span>
+                 </button>`
+              : `<p>第一步：点击顶部右上角「登录 Figma」完成登录；<br/>第二步：扫描拉取全部团队与文件夹。</p>`
+          }
         </div>`;
       return;
     }
 
-    const s = state.scanResult.summary;
-    el.exportOverviewMeta.textContent = `${s.teamCount} 个空间 · ${s.folderCount} 个文件夹 · ${s.fileCount} 个文件`;
-
     const visibleList = getFilteredExportFiles();
     const visibleSet = new Set(visibleList.map((f) => f.key));
     const visibleSelectedCount = visibleList.filter((f) => state.selectedKeys.has(f.key)).length;
+
+    el.exportTableHead.classList.toggle('hidden', visibleList.length === 0);
+    el.exportCenterFooter.classList.toggle(
+      'hidden',
+      state.scanResult.files.length === 0 || (visibleList.length === 0 && state.selectedKeys.size === 0)
+    );
 
     el.exportMasterCb.checked = visibleList.length > 0 && visibleSelectedCount === visibleList.length;
     el.exportMasterCb.indeterminate =
@@ -514,6 +737,16 @@
     el.expandBtnText.textContent = state.allExpanded ? '折叠全部' : '展开全部';
 
     if (visibleList.length === 0) {
+      if (state.scanResult.files.length === 0) {
+        el.treeContainer.innerHTML = `
+          <div class="empty-box">
+            ${ICONS.doc}
+            <h3>未发现可导出的文件</h3>
+            <p>当前账号下暂无可见团队文件或个人草稿。</p>
+            <p class="empty-fallback-hint">若有未自动发现的企业公开或外部团队，可<button class="inline-link-btn" data-open-add-team="1" type="button">补充隐藏团队</button>后重新扫描。</p>
+          </div>`;
+        return;
+      }
       el.treeContainer.innerHTML = `
         <div class="empty-box">
           ${ICONS.doc}
@@ -525,46 +758,12 @@
 
     const rows = [];
     for (const team of state.scanResult.teams) {
-      const folderBlocks = [];
-      let teamVisibleTotal = 0;
-      let teamSelectedTotal = 0;
-
       for (const folder of team.folders) {
         const vFiles = folder.files.filter((f) => visibleSet.has(f.key));
         if (vFiles.length === 0) continue;
+
         const selInFolder = vFiles.filter((f) => state.selectedKeys.has(f.key)).length;
-        teamVisibleTotal += vFiles.length;
-        teamSelectedTotal += selInFolder;
-        folderBlocks.push({ folder, vFiles, selInFolder });
-      }
-
-      if (folderBlocks.length === 0) continue;
-
-      const teamCollapsed = state.collapsedTeams.has(team.id);
-      const teamChecked = teamSelectedTotal === teamVisibleTotal;
-      const teamIndet = teamSelectedTotal > 0 && teamSelectedTotal < teamVisibleTotal;
-      const displayTeamName = team.isDrafts ? '个人草稿' : team.name;
-      const teamIcon = team.isDrafts ? ICONS.doc : ICONS.users;
-
-      rows.push(`
-        <div class="tree-row ${state.activeWorkspaceFilter === team.id ? 'row-highlight' : ''}" data-row-team="${escapeHtml(team.id)}">
-          <div class="col-check">
-            <input type="checkbox" class="dark-cb team-cb" data-team-id="${escapeHtml(team.id)}" ${teamChecked ? 'checked' : ''} data-indet="${teamIndet ? '1' : '0'}" />
-          </div>
-          <div class="name-cell indent-team" data-toggle-team="${escapeHtml(team.id)}" style="cursor:pointer;">
-            <button class="disclosure-btn ${teamCollapsed ? 'collapsed' : ''}" type="button">▾</button>
-            <span class="row-icon">${teamIcon}</span>
-            <span class="row-title strong">${escapeHtml(displayTeamName)}</span>
-          </div>
-          <div class="format-cell">—</div>
-          <div class="status-cell">${teamVisibleTotal} 个文件</div>
-        </div>
-      `);
-
-      if (teamCollapsed) continue;
-
-      for (const { folder, vFiles, selInFolder } of folderBlocks) {
-        // 个人草稿只有单层 Drafts 文件夹，直接展开文件避免冗余层级；普通团队展示文件夹行
+        // 个人草稿单目录直接平铺展示文件，不显示顶层「个人草稿 / Drafts」行；团队项目保留「文件夹 → 文件」两级结构
         const skipFolderRow = Boolean(team.isDrafts && team.folders.length === 1);
         const folderKey = `${team.id}::${folder.id}`;
         const folderCollapsed = !skipFolderRow && state.collapsedFolders.has(folderKey);
@@ -572,15 +771,16 @@
         if (!skipFolderRow) {
           const folderChecked = selInFolder === vFiles.length;
           const folderIndet = selInFolder > 0 && selInFolder < vFiles.length;
+          const folderTooltip = team.isDrafts ? folder.name : `${team.name} / ${folder.name}`;
           rows.push(`
             <div class="tree-row">
               <div class="col-check">
                 <input type="checkbox" class="dark-cb folder-cb" data-folder-key="${escapeHtml(folderKey)}" ${folderChecked ? 'checked' : ''} data-indet="${folderIndet ? '1' : '0'}" />
               </div>
-              <div class="name-cell indent-folder" data-toggle-folder="${escapeHtml(folderKey)}" style="cursor:pointer;">
-                <button class="disclosure-btn ${folderCollapsed ? 'collapsed' : ''}" type="button">▾</button>
+              <div class="name-cell indent-team" data-toggle-folder="${escapeHtml(folderKey)}" style="cursor:pointer;">
+                <button class="disclosure-btn ${folderCollapsed ? 'collapsed' : ''}" type="button">${ICONS.triangle}</button>
                 <span class="row-icon">${ICONS.folder}</span>
-                <span class="row-title strong">${escapeHtml(folder.name)}</span>
+                <span class="row-title strong" title="${escapeHtml(folderTooltip)}">${escapeHtml(folder.name)}</span>
               </div>
               <div class="format-cell">—</div>
               <div class="status-cell">${vFiles.length} 个文件</div>
@@ -593,7 +793,7 @@
         for (const file of vFiles) {
           const checked = state.selectedKeys.has(file.key);
           const isRunning = state.activeExportKey === file.key;
-          const indentClass = skipFolderRow ? 'indent-folder' : 'indent-file';
+          const indentClass = skipFolderRow ? 'indent-team' : 'indent-import-file';
           rows.push(`
             <div class="tree-row ${isRunning ? 'row-running' : ''}">
               <div class="col-check">
@@ -664,20 +864,19 @@
       if (!validIds.has(id)) state.selectedImportIds.delete(id);
     }
 
-    const totalGroups = new Set(state.importQueue.map((f) => f.suggestedFolder || 'Imported')).size;
-    const totalBytes = state.importQueue.reduce((sum, f) => sum + (f.fileSize || 0), 0);
-
-    el.importOverviewMeta.textContent =
-      state.importQueue.length > 0
-        ? `${totalGroups} 个分组 · ${state.importQueue.length} 个文件 · 共 ${formatBytes(totalBytes)}`
-        : '支持选择或直接拖入 .fig / .jam / .deck / .sketch 文件与备份目录';
-
     el.btnPickImportFiles.disabled = state.isImporting;
     el.btnPickImportFolder.disabled = state.isImporting;
+    el.importPickerActions.classList.toggle('hidden', state.importQueue.length === 0);
     el.btnClearImportQueue.disabled = state.isImporting || state.importQueue.length === 0;
 
     const visibleList = getFilteredImportFiles();
     const visibleSelectedCount = visibleList.filter((i) => state.selectedImportIds.has(i.id)).length;
+
+    el.importTableHead.classList.toggle('hidden', visibleList.length === 0);
+    el.importCenterFooter.classList.toggle(
+      'hidden',
+      state.importQueue.length === 0 || (visibleList.length === 0 && state.selectedImportIds.size === 0)
+    );
 
     el.importMasterCb.checked = visibleList.length > 0 && visibleSelectedCount === visibleList.length;
     el.importMasterCb.indeterminate =
@@ -691,7 +890,16 @@
         <div class="empty-box">
           ${ICONS.folder}
           <h3>拖拽设计文件或备份文件夹到这里</h3>
-          <p>支持 <code>.fig</code>、<code>.jam</code>、<code>.deck</code>、<code>.sketch</code>，也可点击右上角「选择文件」或「选择文件夹」自动递归添加。</p>
+          <p>支持 <code>.fig</code>、<code>.jam</code>、<code>.deck</code>、<code>.sketch</code> 文件与备份目录。</p>
+          <div class="empty-import-actions">
+            <button class="pill-btn" type="button" data-pick-import="files" ${state.isImporting ? 'disabled' : ''}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>选择文件</span>
+            </button>
+            <button class="pill-btn" type="button" data-pick-import="folder" ${state.isImporting ? 'disabled' : ''}>
+              ${ICONS.folder}<span>选择文件夹</span>
+            </button>
+          </div>
         </div>`;
       return;
     }
@@ -726,7 +934,7 @@
             <input type="checkbox" class="dark-cb imp-group-cb" data-imp-group="${escapeHtml(gName)}" ${gChecked ? 'checked' : ''} data-indet="${gIndet ? '1' : '0'}" />
           </div>
           <div class="name-cell indent-team" data-toggle-imp-group="${escapeHtml(gName)}" style="cursor:pointer;">
-            <button class="disclosure-btn ${collapsed ? 'collapsed' : ''}" type="button">▾</button>
+            <button class="disclosure-btn ${collapsed ? 'collapsed' : ''}" type="button">${ICONS.triangle}</button>
             <span class="row-icon">${ICONS.folder}</span>
             <span class="row-title strong">${escapeHtml(gName)}</span>
           </div>
@@ -768,35 +976,44 @@
   // ==================== 右下进度与主 CTA 渲染 ====================
   function renderProgressAndCTA() {
     const isImport = state.mode === 'import';
-    el.progressTitle.textContent = isImport ? '导入进度' : '导出进度';
-
-    const stats = isImport ? state.importStats : state.exportStats;
-    if (!stats) {
-      el.progressPct.textContent = '0%';
-      el.progressFill.style.width = '0%';
-      el.progressMeta.textContent = isImport ? '等待开始导入' : '等待开始导出';
-      el.cntSucceeded.textContent = '0';
-      el.cntSkipped.textContent = '0';
-      el.cntFailed.textContent = '0';
-    } else {
-      const pct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-      el.progressPct.textContent = `${pct}%`;
-      el.progressFill.style.width = `${pct}%`;
-      el.cntSucceeded.textContent = (isImport ? stats.imported : stats.exported) || 0;
-      el.cntSkipped.textContent = stats.skipped || 0;
-      el.cntFailed.textContent = stats.failed || 0;
-
-      if (stats.currentFile) {
-        el.progressMeta.textContent = isImport
-          ? `正在导入 (${stats.currentFile.index}/${stats.total}): ${stats.currentFile.name}`
-          : `正在导出 (${stats.currentFile.index}/${stats.total}): ${stats.currentFile.name}`;
-      } else if (stats.finishedAt) {
-        el.progressMeta.textContent = `已完成处理 ${stats.completed}/${stats.total} 个文件`;
-      }
-    }
-
     const anyRunning = state.isExporting || state.isImporting;
     const busy = anyRunning || state.isScanning;
+
+    el.settingsShellCard.classList.toggle('is-working', anyRunning);
+    el.idleCtaStack.classList.toggle('hidden', anyRunning);
+    el.progressCard.classList.toggle('hidden', !anyRunning);
+
+    if (anyRunning) {
+      const runningImport = state.isImporting;
+      el.progressTitle.textContent = runningImport ? '导入进度' : '导出进度';
+      el.btnStopAction.textContent = runningImport ? '停止导入' : '停止导出';
+
+      const stats = runningImport ? state.importStats : state.exportStats;
+      if (!stats) {
+        el.progressPct.textContent = '0%';
+        el.progressFill.style.width = '0%';
+        el.progressMeta.textContent = runningImport ? '正在准备导入...' : '正在准备导出...';
+        el.cntSucceeded.textContent = '0';
+        el.cntSkipped.textContent = '0';
+        el.cntFailed.textContent = '0';
+      } else {
+        const pct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+        el.progressPct.textContent = `${pct}%`;
+        el.progressFill.style.width = `${pct}%`;
+        el.cntSucceeded.textContent = (runningImport ? stats.imported : stats.exported) || 0;
+        el.cntSkipped.textContent = stats.skipped || 0;
+        el.cntFailed.textContent = stats.failed || 0;
+
+        if (stats.currentFile) {
+          el.progressMeta.textContent = runningImport
+            ? `正在导入 (${stats.currentFile.index}/${stats.total}): ${stats.currentFile.name}`
+            : `正在导出 (${stats.currentFile.index}/${stats.total}): ${stats.currentFile.name}`;
+        } else {
+          el.progressMeta.textContent = `已处理 ${stats.completed}/${stats.total} 个文件`;
+        }
+      }
+      return;
+    }
 
     if (!isImport) {
       const selCount = state.selectedKeys.size;
@@ -804,14 +1021,10 @@
         ? state.scanResult.files.filter((f) => f.backupStatus === 'failed').length
         : 0;
 
-      el.btnPrimaryAction.classList.toggle('hidden', state.isExporting);
       el.btnPrimaryAction.disabled = busy || selCount === 0;
       el.btnPrimaryAction.textContent = `导出 ${selCount} 个文件`;
 
-      el.btnStopAction.classList.toggle('hidden', !state.isExporting);
-      el.btnStopAction.textContent = '停止导出';
-
-      if (!anyRunning && failedCount > 0) {
+      if (failedCount > 0) {
         el.btnRetryAction.classList.remove('hidden');
         el.btnRetryAction.textContent = `重试 ${failedCount} 个失败项`;
       } else {
@@ -821,14 +1034,10 @@
       const selCount = state.selectedImportIds.size;
       const failedCount = state.importQueue.filter((f) => f.status === 'failed').length;
 
-      el.btnPrimaryAction.classList.toggle('hidden', state.isImporting);
       el.btnPrimaryAction.disabled = busy || selCount === 0;
       el.btnPrimaryAction.textContent = `导入 ${selCount} 个文件`;
 
-      el.btnStopAction.classList.toggle('hidden', !state.isImporting);
-      el.btnStopAction.textContent = '停止导入';
-
-      if (!anyRunning && failedCount > 0) {
+      if (failedCount > 0) {
         el.btnRetryAction.classList.remove('hidden');
         el.btnRetryAction.textContent = `重试 ${failedCount} 个失败项`;
       } else {
@@ -852,6 +1061,11 @@
   // ==================== 补充团队弹窗与目标团队选择 ====================
   function renderExtraTeams() {
     const ids = state.config.extraTeamIds || [];
+    if (el.btnHeaderAddTeam) {
+      el.btnHeaderAddTeam.classList.toggle('has-extra', ids.length > 0);
+      el.btnHeaderAddTeam.title =
+        ids.length > 0 ? `补充隐藏团队（已添加 ${ids.length} 个）` : '补充隐藏团队';
+    }
     if (ids.length === 0) {
       el.extraTeamsChips.innerHTML = '';
       return;
@@ -1095,7 +1309,12 @@
     state.collapsedTeams.clear();
     state.collapsedFolders.clear();
     if (!state.allExpanded) {
-      for (const t of state.scanResult.teams) state.collapsedTeams.add(t.id);
+      for (const t of state.scanResult.teams) {
+        if (t.isDrafts && t.folders.length === 1) continue;
+        for (const fl of t.folders) {
+          state.collapsedFolders.add(`${t.id}::${fl.id}`);
+        }
+      }
     }
     renderExportSection();
   });
@@ -1121,6 +1340,18 @@
   });
 
   el.treeContainer.addEventListener('click', (e) => {
+    const emptyScanBtn = e.target.closest('[data-empty-scan]');
+    if (emptyScanBtn) {
+      el.btnScan.click();
+      return;
+    }
+
+    const openAddTeamBtn = e.target.closest('[data-open-add-team]');
+    if (openAddTeamBtn) {
+      openAddTeamModal();
+      return;
+    }
+
     const fileCb = e.target.closest('.file-cb');
     if (fileCb) {
       const key = fileCb.getAttribute('data-file-key');
@@ -1148,39 +1379,11 @@
       return;
     }
 
-    const teamCb = e.target.closest('.team-cb');
-    if (teamCb) {
-      e.stopPropagation();
-      const teamId = teamCb.getAttribute('data-team-id');
-      const visibleSet = new Set(getFilteredExportFiles().map((f) => f.key));
-      const team = state.scanResult.teams.find((t) => t.id === teamId);
-      if (team) {
-        for (const folder of team.folders) {
-          for (const f of folder.files) {
-            if (!visibleSet.has(f.key)) continue;
-            if (teamCb.checked) state.selectedKeys.add(f.key);
-            else state.selectedKeys.delete(f.key);
-          }
-        }
-      }
-      renderAll();
-      return;
-    }
-
     const toggleFolder = e.target.closest('[data-toggle-folder]');
     if (toggleFolder) {
       const fk = toggleFolder.getAttribute('data-toggle-folder');
       if (state.collapsedFolders.has(fk)) state.collapsedFolders.delete(fk);
       else state.collapsedFolders.add(fk);
-      renderExportSection();
-      return;
-    }
-
-    const toggleTeam = e.target.closest('[data-toggle-team]');
-    if (toggleTeam) {
-      const tid = toggleTeam.getAttribute('data-toggle-team');
-      if (state.collapsedTeams.has(tid)) state.collapsedTeams.delete(tid);
-      else state.collapsedTeams.add(tid);
       renderExportSection();
     }
   });
@@ -1242,24 +1445,6 @@
     });
   });
 
-  el.importDropzone.addEventListener('drop', async (e) => {
-    if (state.isImporting) return;
-    const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
-    if (files.length === 0) return;
-    const paths = files
-      .map((f) => {
-        try {
-          return bridge.getPathForFile(f);
-        } catch {
-          return f.path || '';
-        }
-      })
-      .filter(Boolean);
-
-    if (paths.length === 0) return;
-    await addDroppedPaths(paths);
-  });
-
   async function addDroppedPaths(paths) {
     if (state.mode !== 'import' || state.isImporting || !paths.length) return;
     try {
@@ -1303,6 +1488,13 @@
   });
 
   el.importTreeContainer.addEventListener('click', async (e) => {
+    const pickBtn = e.target.closest('[data-pick-import]');
+    if (pickBtn) {
+      if (pickBtn.dataset.pickImport === 'files') el.btnPickImportFiles.click();
+      else el.btnPickImportFolder.click();
+      return;
+    }
+
     const rmBtn = e.target.closest('[data-remove-imp]');
     if (rmBtn) {
       e.stopPropagation();
@@ -1395,6 +1587,14 @@
   async function startExport(fileKeys, skipExportedOverride) {
     try {
       state.isExporting = true;
+      state.exportStats = {
+        total: fileKeys.length,
+        completed: 0,
+        exported: 0,
+        skipped: 0,
+        failed: 0,
+        currentFile: null,
+      };
       renderAll();
       await bridge.startExport({
         fileKeys,
@@ -1451,6 +1651,14 @@
 
     try {
       state.isImporting = true;
+      state.importStats = {
+        total: fileIds.length,
+        completed: 0,
+        imported: 0,
+        skipped: 0,
+        failed: 0,
+        currentFile: null,
+      };
       renderAll();
       await bridge.startImport({
         fileIds,

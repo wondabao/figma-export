@@ -2,9 +2,11 @@
 
 mod figma;
 mod local;
+mod updater;
 
 use figma::FigmaBrowser;
 use local::LocalFiles;
+use updater::AppUpdater;
 use std::time::Duration;
 use tauri::{webview::PageLoadEvent, Manager, WebviewWindow, WindowEvent};
 
@@ -44,6 +46,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(LocalFiles::default())
         .manage(FigmaBrowser::default())
+        .manage(AppUpdater::default())
         .setup(move |app| {
             if let Some(main_win) = app.get_webview_window("main") {
                 let app_handle = app.handle().clone();
@@ -99,7 +102,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             local::local_files,
-            figma::figma_browser
+            figma::figma_browser,
+            updater::app_updater
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Figma Export Tauri application");

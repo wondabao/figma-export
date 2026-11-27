@@ -1,8 +1,6 @@
-const fs = require('fs');
 const {
   computeDuplicateNameKeys,
   buildTargetFilePath,
-  loadManifest,
   getExtensionForEditorType,
 } = require('./utils');
 
@@ -18,7 +16,12 @@ function describeFailure(response) {
 }
 
 class FigmaScanner {
-  constructor(browserManager, onLog = () => {}, onProgress = () => {}, storage = { loadManifest, exists: fs.existsSync }) {
+  constructor(
+    browserManager,
+    onLog = () => {},
+    onProgress = () => {},
+    storage = { loadManifest: async () => ({ files: {} }), exists: async () => false }
+  ) {
     this.browser = browserManager;
     this.onLog = onLog;
     this.onProgress = onProgress;

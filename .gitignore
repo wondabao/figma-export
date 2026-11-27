@@ -1,6 +1,5 @@
 node_modules/
 dist/
-.figma-profile/
 .exporter-config.json
 exporter-config.json
 export-manifest.json

@@ -200,7 +200,7 @@ async fn wait_for_document_ready(view: &WebviewWindow, limit: Duration) -> Resul
                 _ => {}
             }
         }
-        sleep(Duration::from_millis(250)).await;
+        sleep(Duration::from_millis(80)).await;
     }
     Ok("timeout".into())
 }
@@ -208,14 +208,17 @@ async fn wait_for_document_ready(view: &WebviewWindow, limit: Duration) -> Resul
 async fn ensure_figma_api_page(
     view: &WebviewWindow,
     work: &mut WorkState,
+    just_created: bool,
 ) -> Result<(), String> {
-    let needs_nav = match view.url() {
-        Ok(url) => !is_figma_origin(&url) || is_auth_flow_route(url.path()),
-        Err(_) => true,
-    };
+    if !just_created {
+        let needs_nav = match view.url() {
+            Ok(url) => !is_figma_origin(&url) || is_auth_flow_route(url.path()),
+            Err(_) => true,
+        };
 
-    if needs_nav {
-        navigate(view, "/files/recents-and-sharing")?;
+        if needs_nav {
+            navigate(view, "/files/recents-and-sharing")?;
+        }
     }
 
     let state = wait_for_document_ready(view, Duration::from_secs(20)).await?;
@@ -234,12 +237,18 @@ async fn ensure_figma_api_page(
     Ok(())
 }
 
-async fn open_file_browser(view: &WebviewWindow, work: &mut WorkState) -> Result<Url, String> {
-    let on_files = view
-        .url()
-        .is_ok_and(|u| is_figma_origin(&u) && matches_route(u.path(), FILES_PATH));
-    if !on_files {
-        navigate(view, "/files/recents-and-sharing")?;
+async fn open_file_browser(
+    view: &WebviewWindow,
+    work: &mut WorkState,
+    just_created: bool,
+) -> Result<Url, String> {
+    if !just_created {
+        let on_files = view
+            .url()
+            .is_ok_and(|u| is_figma_origin(&u) && matches_route(u.path(), FILES_PATH));
+        if !on_files {
+            navigate(view, "/files/recents-and-sharing")?;
+        }
     }
     let state = wait_for_document_ready(view, Duration::from_secs(25)).await?;
     if state == "login" {
@@ -283,8 +292,12 @@ async fn wait_for_pathname_contains(
     Ok(false)
 }
 
-async fn open_drafts_page(view: &WebviewWindow, work: &mut WorkState) -> Result<(), String> {
-    let browser_url = open_file_browser(view, work).await?;
+async fn open_drafts_page(
+    view: &WebviewWindow,
+    work: &mut WorkState,
+    just_created: bool,
+) -> Result<(), String> {
+    let browser_url = open_file_browser(view, work, just_created).await?;
     if drafts_route(browser_url.path())
         && wait_for_pathname_contains(view, "/drafts", Duration::from_secs(15)).await?
     {
@@ -394,9 +407,9 @@ fn export_error_message(code: &str) -> String {
 }
 
 impl FigmaBrowser {
-    fn remote(&self, app: &AppHandle) -> Result<WebviewWindow, String> {
+    fn remote(&self, app: &AppHandle) -> Result<(WebviewWindow, bool), String> {
         if let Some(window) = app.get_webview_window("figma") {
-            return Ok(window);
+            return Ok((window, false));
         }
 
         let download = self.download.clone();
@@ -463,7 +476,7 @@ impl FigmaBrowser {
             }
         });
 
-        Ok(window)
+        Ok((window, true))
     }
 
     async fn wait_for_download(&self, timeout_sec: u64) -> Result<Option<String>, String> {
@@ -491,29 +504,32 @@ impl FigmaBrowser {
 
     async fn handle_auth(&self, app: &AppHandle) -> Result<Value, String> {
         let mut work = self.work.lock().await;
-        let view = self.remote(app)?;
+        let (view, just_created) = self.remote(app)?;
         let visible = view.is_visible().unwrap_or(false);
 
-        if let Ok(url) = view.url() {
-            if !is_figma_origin(&url) {
-                // 如果窗口正处于可见登录状态（如正在跳转 Google SSO / 企业单点登录），绝不打断导航
-                if visible {
+        if !just_created {
+            if let Ok(url) = view.url() {
+                if !is_figma_origin(&url) {
+                    // 如果窗口正处于可见登录状态（如正在跳转 Google SSO / 企业单点登录），绝不打断导航
+                    if visible {
+                        return Ok(json!({
+                            "authenticated": false,
+                            "user": null,
+                            "windowVisible": true,
+                            "transient": true,
+                        }));
+                    }
+                    navigate(&view, FILES_PATH)?;
+                } else if is_auth_flow_route(url.path()) {
                     return Ok(json!({
                         "authenticated": false,
                         "user": null,
-                        "windowVisible": true,
+                        "windowVisible": visible,
                     }));
                 }
+            } else if !visible {
                 navigate(&view, FILES_PATH)?;
-            } else if is_auth_flow_route(url.path()) {
-                return Ok(json!({
-                    "authenticated": false,
-                    "user": null,
-                    "windowVisible": visible,
-                }));
             }
-        } else if !visible {
-            navigate(&view, FILES_PATH)?;
         }
 
         let doc_state = wait_for_document_ready(&view, Duration::from_secs(12)).await?;
@@ -522,6 +538,7 @@ impl FigmaBrowser {
                 "authenticated": false,
                 "user": null,
                 "windowVisible": view.is_visible().unwrap_or(false),
+                "transient": doc_state == "timeout",
             }));
         }
 
@@ -533,7 +550,7 @@ impl FigmaBrowser {
 
         let mut auth = call::<Value>(&view, "auth", Value::Null, Duration::from_secs(15))
             .await
-            .unwrap_or_else(|_| json!({ "authenticated": false, "user": null }));
+            .unwrap_or_else(|_| json!({ "authenticated": false, "user": null, "transient": true }));
 
         if let Some(obj) = auth.as_object_mut() {
             obj.insert(
@@ -546,20 +563,23 @@ impl FigmaBrowser {
 
     async fn handle_login(&self, app: &AppHandle, args: &Value) -> Result<Value, String> {
         let _work = self.work.lock().await;
-        let view = self.remote(app)?;
+        let (view, just_created) = self.remote(app)?;
         let already_auth = args["alreadyAuthenticated"].as_bool().unwrap_or(false);
 
         if already_auth {
-            let on_files = view
-                .url()
-                .is_ok_and(|u| is_figma_origin(&u) && matches_route(u.path(), FILES_PATH));
-            if !on_files {
-                navigate(&view, FILES_PATH)?;
+            if !just_created {
+                let on_files = view
+                    .url()
+                    .is_ok_and(|u| is_figma_origin(&u) && matches_route(u.path(), FILES_PATH));
+                if !on_files {
+                    navigate(&view, FILES_PATH)?;
+                }
             }
         } else {
-            let on_login_or_oauth = view
-                .url()
-                .is_ok_and(|u| !is_figma_origin(&u) || is_auth_flow_route(u.path()));
+            let on_login_or_oauth = !just_created
+                && view
+                    .url()
+                    .is_ok_and(|u| !is_figma_origin(&u) || is_auth_flow_route(u.path()));
             if !on_login_or_oauth {
                 navigate(&view, LOGIN_PATH)?;
             }
@@ -573,7 +593,7 @@ impl FigmaBrowser {
     async fn handle_logout(&self, app: &AppHandle) -> Result<Value, String> {
         let mut work = self.work.lock().await;
         work.last_fuid = None;
-        let view = self.remote(app)?;
+        let (view, _) = self.remote(app)?;
         let _ = view.hide();
         view.clear_all_browsing_data().map_err(display_error)?;
         navigate(&view, LOGIN_PATH)?;
@@ -582,15 +602,15 @@ impl FigmaBrowser {
 
     async fn handle_request(&self, app: &AppHandle, args: Value) -> Result<Value, String> {
         let mut work = self.work.lock().await;
-        let view = self.remote(app)?;
-        ensure_figma_api_page(&view, &mut work).await?;
+        let (view, just_created) = self.remote(app)?;
+        ensure_figma_api_page(&view, &mut work, just_created).await?;
         call(&view, "request", args, Duration::from_secs(30)).await
     }
 
     async fn handle_discover_teams(&self, app: &AppHandle) -> Result<Value, String> {
         let mut work = self.work.lock().await;
-        let view = self.remote(app)?;
-        if open_file_browser(&view, &mut work).await.is_err() {
+        let (view, just_created) = self.remote(app)?;
+        if open_file_browser(&view, &mut work, just_created).await.is_err() {
             return Ok(json!([]));
         }
         sleep(Duration::from_millis(800)).await;
@@ -626,7 +646,7 @@ impl FigmaBrowser {
         let temp_path = PathBuf::from(format!("{}.downloading", target_path.display()));
         let _ = fs::remove_file(&temp_path);
 
-        let view = self.remote(app)?;
+        let (view, _) = self.remote(app)?;
         if silent {
             let _ = view.hide();
         } else {
@@ -796,7 +816,7 @@ impl FigmaBrowser {
         let timeout_sec = args["timeoutSec"].as_u64().unwrap_or(240).clamp(30, 1800);
         let silent = args["silent"].as_bool().unwrap_or(true);
 
-        let view = self.remote(app)?;
+        let (view, just_created) = self.remote(app)?;
         if silent {
             let _ = view.hide();
         } else {
@@ -804,7 +824,7 @@ impl FigmaBrowser {
         }
 
         if is_drafts {
-            open_drafts_page(&view, &mut work).await?;
+            open_drafts_page(&view, &mut work, just_created).await?;
         } else {
             let fid = folder_id.ok_or("缺少目标文件夹 ID。")?;
             open_project_folder_page(&view, &work, team_id, fid).await?;

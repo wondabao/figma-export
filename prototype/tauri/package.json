@@ -1,6 +1,6 @@
 {
-  "name": "figma-export-tauri-prototype",
-  "version": "0.1.0",
+  "name": "figma-export-tauri",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "tauri dev",

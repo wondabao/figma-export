@@ -9,9 +9,8 @@ Figma 文件批量导入导出工具，支持 macOS 和 Windows。
 | macOS，Apple Silicon | `-mac-arm64.dmg` |
 | macOS，Intel | `-mac-x64.dmg` |
 | Windows，x64 安装版 | `-win-x64-setup.exe` |
-| Windows，x64 便携版 | `-win-x64-portable.exe` |
 
-基于 **Electron** 构建的跨平台独立桌面软件，**无需安装 Google Chrome、无需安装 Node.js、无需任何外部浏览器**，双击打开即可完成：
+基于 **Tauri 2.0 + Rust + 系统原生 WebView** 构建的轻量级跨平台桌面软件（安装包仅约 2 MB），**无需安装 Google Chrome、无需安装 Node.js、无需任何外部浏览器**，双击打开即可完成：
 - **📤 批量导出备份**：自动扫描当前 Figma 账号下**所有团队、所有文件夹及个人草稿箱 (Drafts)**，后台静默批量导出 `.fig` / `.jam` / `.deck` 源文件，并按 `团队名 / 文件夹名 / 文件名` 自动归档。
 - **📥 批量导入还原**：支持多选本地 `.fig` / `.jam` / `.deck` / `.sketch` 文件、选择整个文件夹递归扫描、或直接拖拽文件/目录到窗口，一键批量导入到**个人草稿箱 (Drafts)**、**指定团队文件夹**，或**按本地目录结构在指定团队下自动匹配/新建同名文件夹还原**。
 
@@ -37,10 +36,10 @@ Figma 文件批量导入导出工具，支持 macOS 和 Windows。
 
 ## 开发运行
 
-使用 Node.js 22 和 npm 安装锁定的依赖。
+需要安装 Node.js 22 与 Rust 工具链：
 
 ```bash
-npm ci
+npm --prefix prototype/tauri ci
 npm start
 ```
 
