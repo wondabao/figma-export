@@ -16,16 +16,15 @@ const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
 const bundleType = isMac ? 'dmg' : isWin ? 'nsis' : 'appimage';
 
-const tauriArgs = ['tauri', 'build', '--bundles', bundleType];
+const tauriCliJs = path.join(tauriRoot, 'node_modules', '@tauri-apps', 'cli', 'tauri.js');
+const cliArgs = [tauriCliJs, 'build', '--bundles', bundleType];
 if (rustTarget) {
-  tauriArgs.push('--target', rustTarget);
+  cliArgs.push('--target', rustTarget);
 }
 
-const npxCmd = isWin ? 'npx.cmd' : 'npx';
-const res = spawnSync(npxCmd, tauriArgs, {
+const res = spawnSync(process.execPath, cliArgs, {
   cwd: tauriRoot,
   stdio: 'inherit',
-  shell: isWin,
 });
 if (res.status !== 0) {
   process.exit(res.status || 1);

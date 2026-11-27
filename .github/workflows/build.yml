@@ -38,6 +38,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: prototype/tauri/package-lock.json
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -87,7 +88,8 @@ jobs:
           if ($install.ExitCode -ne 0) {
             throw "Silent installation failed with exit code $($install.ExitCode)"
           }
-          if (!(Get-ChildItem $installDir -Filter '*.exe' | Where-Object { $_.Name -notlike 'Uninstall*' })) {
+          $exeFound = Get-ChildItem -Path @($installDir, (Join-Path $env:LOCALAPPDATA 'Figma Export')) -Filter '*.exe' -ErrorAction SilentlyContinue | Where-Object { $_.Name -notlike 'uninstall*' }
+          if (!$exeFound) {
             throw 'Installed executable missing'
           }
 
