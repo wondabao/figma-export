@@ -188,12 +188,16 @@
     currentUpdateState = u;
 
     if (u.currentVersion) {
-      el.btnVersion.textContent = `v${u.currentVersion}`;
       el.versionCurrent.textContent = `当前版本 v${u.currentVersion}`;
     }
 
-    const hasUpdate = Boolean(u.available);
+    const hasUpdate = Boolean(u.available && u.latestVersion);
     el.btnVersion.classList.toggle('has-update', hasUpdate);
+    if (hasUpdate) {
+      el.btnVersion.textContent = `更新到 v${u.latestVersion}`;
+    } else if (u.currentVersion) {
+      el.btnVersion.textContent = `v${u.currentVersion}`;
+    }
     if (u.status === 'downloaded') {
       el.btnVersion.title = `新版本 v${u.latestVersion} 已就绪，点击重启更新`;
     } else if (hasUpdate) {
@@ -391,7 +395,9 @@
   }
 
   bridge.getVersion().then((version) => {
-    el.btnVersion.textContent = `v${version}`;
+    if (!currentUpdateState || !currentUpdateState.available) {
+      el.btnVersion.textContent = `v${version}`;
+    }
     el.versionCurrent.textContent = `当前版本 v${version}`;
   }).catch(() => {
     el.versionCurrent.textContent = '无法获取当前版本';

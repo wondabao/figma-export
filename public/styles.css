@@ -1401,6 +1401,13 @@ code {
 
 .version-trigger.has-update {
   color: var(--info);
+  background: var(--info-bg);
+  font-weight: 600;
+}
+
+.version-trigger.has-update:hover {
+  background: #dbeaff;
+  color: var(--info);
 }
 
 /* ==================== 活动日志上拉抽屉 ==================== */

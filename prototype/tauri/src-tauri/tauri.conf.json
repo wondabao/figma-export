@@ -1,6 +1,6 @@
 {
   "productName": "Figma Export",
-  "version": "1.1.1",
+  "version": "0.1.11",
   "identifier": "io.github.wondabao.figma-export",
   "build": {
     "beforeBuildCommand": "node stage-ui.cjs",
