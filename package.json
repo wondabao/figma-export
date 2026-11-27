@@ -1,7 +1,7 @@
 {
   "name": "figma-export",
   "productName": "Figma Export",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Figma 文件批量导入导出桌面软件（macOS / Windows）— 基于 Tauri 2.0 构建，自动扫描所有团队、文件夹与草稿，静默批量备份与还原源文件",
   "author": "wondabao",
   "license": "MIT",
